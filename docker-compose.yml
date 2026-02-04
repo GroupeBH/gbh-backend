@@ -1,0 +1,41 @@
+version: "3.9"
+services:
+  mongo:
+    image: mongo:7
+    container_name: gbh-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+  redis:
+    image: redis:7-alpine
+    container_name: gbh-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+  api:
+    build: .
+    container_name: gbh-api
+    restart: unless-stopped
+    environment:
+      - APP_ENV=production
+      - SERVER_ADDR=:8080
+      - MONGO_URI=mongodb://mongo:27017
+      - MONGO_DB=gbh
+      - FRONTEND_ORIGIN=http://localhost:3000
+      - RATE_LIMIT_APPOINTMENTS=10
+      - RATE_LIMIT_CONTACT=5
+      - RATE_LIMIT_WINDOW_SEC=60
+      - TZ=Africa/Kinshasa
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - CACHE_TTL_SECONDS=60
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongo
+      - redis
+volumes:
+  mongo_data:

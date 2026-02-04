@@ -1,0 +1,5 @@
+/bin
+/.env.local
+*.env
+tmp/
+*.exe

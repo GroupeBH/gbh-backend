@@ -1,0 +1,292 @@
+﻿openapi: 3.0.3
+info:
+  title: GBH Backend API
+  version: 1.0.0
+  description: API REST JSON pour Groupe B-Holding Sarl (GBH).
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/services:
+    get:
+      summary: Lister les services
+      responses:
+        "200":
+          description: Liste des services
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Service'
+  /api/availability:
+    get:
+      summary: Disponibilités par date
+      parameters:
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+            example: 2026-02-04
+      responses:
+        "200":
+          description: Liste des créneaux disponibles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        "400":
+          description: Requête invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/appointments:
+    post:
+      summary: Créer un rendez-vous
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentCreate'
+      responses:
+        "201":
+          description: Rendez-vous créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        "409":
+          description: Créneau déjà réservé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/appointments/{id}:
+    get:
+      summary: Détails d'un rendez-vous
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rendez-vous
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        "404":
+          description: Non trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/contact:
+    post:
+      summary: Envoyer un message de contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCreate'
+      responses:
+        "201":
+          description: Message reçu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactMessage'
+  /api/payments/intent:
+    post:
+      summary: Simuler une intention de paiement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentIntentRequest'
+      responses:
+        "200":
+          description: Intention de paiement simulée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntent'
+components:
+  schemas:
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        forAudience:
+          type: string
+        slug:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Availability:
+      type: object
+      properties:
+        date:
+          type: string
+        timezone:
+          type: string
+        slots:
+          type: array
+          items:
+            type: string
+            example: 09:00
+    AppointmentCreate:
+      type: object
+      required:
+        - serviceId
+        - name
+        - email
+        - phone
+        - type
+        - date
+        - time
+        - paymentMethod
+      properties:
+        serviceId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        type:
+          type: string
+          enum: [online, presentiel]
+        date:
+          type: string
+          example: 2026-02-04
+        time:
+          type: string
+          example: 14:45
+        paymentMethod:
+          type: string
+          enum: [online, place]
+        price:
+          type: integer
+          example: 15000
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: string
+        serviceId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        type:
+          type: string
+        date:
+          type: string
+        time:
+          type: string
+        duration:
+          type: integer
+          example: 45
+        price:
+          type: integer
+        tax:
+          type: integer
+        total:
+          type: integer
+        status:
+          type: string
+        paymentMethod:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ContactCreate:
+      type: object
+      required:
+        - name
+        - email
+        - phone
+        - subject
+        - message
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        subject:
+          type: string
+        message:
+          type: string
+    ContactMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        subject:
+          type: string
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    PaymentIntentRequest:
+      type: object
+      required:
+        - appointmentId
+      properties:
+        appointmentId:
+          type: string
+    PaymentIntent:
+      type: object
+      properties:
+        intentId:
+          type: string
+        status:
+          type: string
+          example: created
+        amount:
+          type: integer
+        currency:
+          type: string
+          example: CDF
+        method:
+          type: string
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+          additionalProperties:
+            type: string
