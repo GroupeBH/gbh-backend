@@ -113,15 +113,20 @@ func main() {
 			admin.Post("/login", server.AdminLogin)
 			admin.Post("/refresh", server.AdminRefresh)
 			admin.Post("/logout", server.AdminLogout)
-			admin.Use(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager))
-			admin.Post("/services", server.AdminCreateService)
-			admin.Put("/services/{id}", server.AdminUpdateService)
-			admin.Delete("/services/{id}", server.AdminDeleteService)
-			admin.Post("/blocks", server.AdminCreateBlock)
-			admin.Delete("/blocks/{id}", server.AdminDeleteBlock)
-			admin.Get("/appointments", server.AdminListAppointments)
-			admin.Patch("/appointments/{id}/status", server.AdminUpdateAppointmentStatus)
-			admin.Get("/contacts", server.AdminListContacts)
+
+			// Important (chi): middlewares must be attached before defining routes.
+			// We keep login/refresh/logout public, and protect the rest via a sub-router.
+			admin.Group(func(protected chi.Router) {
+				protected.Use(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager))
+				protected.Post("/services", server.AdminCreateService)
+				protected.Put("/services/{id}", server.AdminUpdateService)
+				protected.Delete("/services/{id}", server.AdminDeleteService)
+				protected.Post("/blocks", server.AdminCreateBlock)
+				protected.Delete("/blocks/{id}", server.AdminDeleteBlock)
+				protected.Get("/appointments", server.AdminListAppointments)
+				protected.Patch("/appointments/{id}/status", server.AdminUpdateAppointmentStatus)
+				protected.Get("/contacts", server.AdminListContacts)
+			})
 		})
 	}
 
