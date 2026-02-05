@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -19,13 +20,16 @@ type ContactRequest struct {
 }
 
 func (s *Server) CreateContact(w http.ResponseWriter, r *http.Request) {
+	log := s.logWithRequest(r)
 	var req ContactRequest
 	if err := decodeJSON(r, &req); err != nil {
+		log.Warn("contact create: invalid json")
 		transport.WriteError(w, http.StatusBadRequest, "invalid json", nil)
 		return
 	}
 
 	if err := s.Val.Struct(req); err != nil {
+		log.Warn("contact create: validation error")
 		details := validationDetails(s.Val.ValidationErrors(err))
 		transport.WriteError(w, http.StatusBadRequest, "validation error", details)
 		return
@@ -45,9 +49,11 @@ func (s *Server) CreateContact(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	if _, err := s.Cols.ContactMessages.InsertOne(ctx, msg); err != nil {
+		log.Error("contact create: database error", slog.String("error", err.Error()))
 		transport.WriteError(w, http.StatusInternalServerError, "database error", nil)
 		return
 	}
 
+	log.Info("contact create: stored", slog.String("contact_id", msg.ID))
 	transport.WriteJSON(w, http.StatusCreated, msg)
 }

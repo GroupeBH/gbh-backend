@@ -41,6 +41,20 @@ func TestGenerateSlotsSaturday(t *testing.T) {
 	}
 }
 
+func TestGenerateSlotsWithDuration30(t *testing.T) {
+	loc := mustLoadLoc(t)
+	slots, err := GenerateSlotsWithDuration("2026-02-07", 30, loc)
+	if err != nil {
+		t.Fatalf("GenerateSlotsWithDuration error: %v", err)
+	}
+	if len(slots) != 8 {
+		t.Fatalf("expected 8 slots, got %d", len(slots))
+	}
+	if slots[0] != "09:00" || slots[len(slots)-1] != "12:30" {
+		t.Fatalf("unexpected boundary slots: %v", slots)
+	}
+}
+
 func TestGenerateSlotsSundayClosed(t *testing.T) {
 	loc := mustLoadLoc(t)
 	slots, err := GenerateSlots("2026-02-01", loc)
@@ -122,30 +136,17 @@ func TestIsSlotAllowed(t *testing.T) {
 	}
 }
 
-func TestIsSlotAvailableWithConflict(t *testing.T) {
-	loc := mustLoadLoc(t)
-	now := time.Date(2026, 2, 4, 8, 0, 0, 0, loc)
-	reserved := map[string]bool{"09:00": true}
-
-	ok, err := IsSlotAvailable("2026-02-04", "09:00", loc, now, reserved)
+func TestFilterOverlapping(t *testing.T) {
+	slots := []string{"09:00", "09:30", "10:00"}
+	reserved := []Interval{{Start: 9 * 60, End: 9*60 + 30}}
+	filtered, err := FilterOverlapping(slots, 30, reserved)
 	if err != nil {
-		t.Fatalf("IsSlotAvailable error: %v", err)
+		t.Fatalf("FilterOverlapping error: %v", err)
 	}
-	if ok {
-		t.Fatalf("expected slot to be unavailable due to conflict")
+	if len(filtered) != 2 {
+		t.Fatalf("expected 2 slots, got %d", len(filtered))
 	}
-}
-
-func TestIsSlotAvailableHappyPath(t *testing.T) {
-	loc := mustLoadLoc(t)
-	now := time.Date(2026, 2, 4, 8, 0, 0, 0, loc)
-	reserved := map[string]bool{}
-
-	ok, err := IsSlotAvailable("2026-02-04", "09:45", loc, now, reserved)
-	if err != nil {
-		t.Fatalf("IsSlotAvailable error: %v", err)
-	}
-	if !ok {
-		t.Fatalf("expected slot to be available")
+	if filtered[0] != "09:30" {
+		t.Fatalf("unexpected slots: %v", filtered)
 	}
 }

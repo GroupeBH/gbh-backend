@@ -34,9 +34,13 @@ func Logger(log *slog.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(rec, r)
 			duration := time.Since(start)
 
+			requestID := RequestIDFromContext(r.Context())
+
 			log.Info("request",
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
+				slog.String("remote_ip", r.RemoteAddr),
+				slog.String("request_id", requestID),
 				slog.Int("status", rec.status),
 				slog.Int("bytes", rec.bytes),
 				slog.Duration("duration", duration),

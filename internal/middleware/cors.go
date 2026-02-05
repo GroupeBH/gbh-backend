@@ -11,11 +11,12 @@ func CORS(allowedOrigin string) func(http.Handler) http.Handler {
 			if origin != "" && origin == allowedOrigin {
 				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 				w.Header().Set("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
 			}
 
 			if r.Method == http.MethodOptions {
-				w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Key")
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}

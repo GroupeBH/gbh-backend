@@ -9,6 +9,7 @@ type Cache interface {
 	Get(ctx context.Context, key string) ([]byte, bool, error)
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
 	Delete(ctx context.Context, key string) error
+	DeletePrefix(ctx context.Context, prefix string) error
 }
 
 type NoopCache struct{}
@@ -26,5 +27,9 @@ func (n *NoopCache) Set(ctx context.Context, key string, value []byte, ttl time.
 }
 
 func (n *NoopCache) Delete(ctx context.Context, key string) error {
+	return nil
+}
+
+func (n *NoopCache) DeletePrefix(ctx context.Context, prefix string) error {
 	return nil
 }

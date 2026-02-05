@@ -2,12 +2,13 @@ package handlers
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"gbh-backend/internal/schedule"
 	"gbh-backend/internal/transport"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 type availabilityQuery struct {
@@ -15,16 +16,26 @@ type availabilityQuery struct {
 }
 
 func (s *Server) GetAvailability(w http.ResponseWriter, r *http.Request) {
+	log := s.logWithRequest(r)
 	q := availabilityQuery{Date: r.URL.Query().Get("date")}
 	if err := s.Val.Struct(q); err != nil {
+		log.Warn("availability: invalid query")
 		details := validationDetails(s.Val.ValidationErrors(err))
 		transport.WriteError(w, http.StatusBadRequest, "invalid query", details)
 		return
 	}
 
-	cacheKey := "availability:" + q.Date
+	duration, err := parseDurationParam(r.URL.Query().Get("duration"), schedule.SlotMinutes)
+	if err != nil {
+		log.Warn("availability: invalid duration")
+		transport.WriteError(w, http.StatusBadRequest, "invalid duration", nil)
+		return
+	}
+
+	cacheKey := "availability:" + q.Date + ":" + strconv.Itoa(duration)
 	if s.Cache != nil {
 		if cached, ok, err := s.Cache.Get(r.Context(), cacheKey); err == nil && ok {
+			log.Info("availability: cache hit", slog.String("date", q.Date))
 			writeCachedJSON(w, http.StatusOK, cached)
 			return
 		}
@@ -32,76 +43,29 @@ func (s *Server) GetAvailability(w http.ResponseWriter, r *http.Request) {
 
 	past, err := schedule.IsDatePast(q.Date, s.Cfg.Timezone, time.Now())
 	if err != nil {
+		log.Warn("availability: invalid date", slog.String("date", q.Date))
 		transport.WriteError(w, http.StatusBadRequest, "invalid date", nil)
 		return
 	}
 	if past {
+		log.Warn("availability: date in the past", slog.String("date", q.Date))
 		transport.WriteError(w, http.StatusBadRequest, "date in the past", nil)
-		return
-	}
-
-	slots, err := schedule.GenerateSlots(q.Date, s.Cfg.Timezone)
-	if err != nil {
-		transport.WriteError(w, http.StatusBadRequest, "invalid date", nil)
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-
-	reserved := make(map[string]bool)
-
-	appCursor, err := s.Cols.Appointments.Find(ctx, bson.M{"date": q.Date})
+	slots, err := s.computeAvailableSlots(ctx, q.Date, duration, time.Now())
 	if err != nil {
-		transport.WriteError(w, http.StatusInternalServerError, "database error", nil)
+		log.Error("availability: compute error", slog.String("error", err.Error()))
+		transport.WriteError(w, http.StatusInternalServerError, "availability error", nil)
 		return
-	}
-	for appCursor.Next(ctx) {
-		var doc bson.M
-		if err := appCursor.Decode(&doc); err == nil {
-			if t, ok := doc["time"].(string); ok {
-				reserved[t] = true
-			}
-		}
-	}
-	if err := appCursor.Err(); err != nil {
-		transport.WriteError(w, http.StatusInternalServerError, "database error", nil)
-		return
-	}
-	appCursor.Close(ctx)
-
-	blockCursor, err := s.Cols.ReservationBlocks.Find(ctx, bson.M{"date": q.Date})
-	if err != nil {
-		transport.WriteError(w, http.StatusInternalServerError, "database error", nil)
-		return
-	}
-	for blockCursor.Next(ctx) {
-		var doc bson.M
-		if err := blockCursor.Decode(&doc); err == nil {
-			if t, ok := doc["time"].(string); ok {
-				reserved[t] = true
-			}
-		}
-	}
-	if err := blockCursor.Err(); err != nil {
-		transport.WriteError(w, http.StatusInternalServerError, "database error", nil)
-		return
-	}
-	blockCursor.Close(ctx)
-
-	slots = schedule.FilterReserved(slots, reserved)
-
-	if dateIsToday(q.Date, s.Cfg.Timezone) {
-		slots, err = schedule.FilterPastSlots(q.Date, slots, s.Cfg.Timezone, time.Now())
-		if err != nil {
-			transport.WriteError(w, http.StatusInternalServerError, "slot filtering error", nil)
-			return
-		}
 	}
 
 	response := map[string]interface{}{
 		"date":     q.Date,
 		"timezone": s.Cfg.Timezone.String(),
+		"duration": duration,
 		"slots":    slots,
 	}
 
@@ -109,6 +73,7 @@ func (s *Server) GetAvailability(w http.ResponseWriter, r *http.Request) {
 		_ = s.Cache.Set(r.Context(), cacheKey, payload, time.Duration(s.Cfg.CacheTTLSeconds)*time.Second)
 	}
 
+	log.Info("availability: ok", slog.String("date", q.Date), slog.Int("duration", duration), slog.Int("slots", len(slots)))
 	transport.WriteJSON(w, http.StatusOK, response)
 }
 

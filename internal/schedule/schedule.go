@@ -2,6 +2,7 @@ package schedule
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -10,6 +11,7 @@ const SlotMinutes = 45
 var (
 	ErrInvalidDate = errors.New("invalid date format")
 	ErrInvalidTime = errors.New("invalid time format")
+	ErrInvalidDuration = errors.New("invalid duration")
 )
 
 type TimeRange struct {
@@ -42,6 +44,20 @@ func ParseDateTime(dateStr, timeStr string, loc *time.Location) (time.Time, erro
 	return parsed, nil
 }
 
+func ParseClockToMinutes(timeStr string) (int, error) {
+	tm, err := time.Parse("15:04", timeStr)
+	if err != nil {
+		return 0, ErrInvalidTime
+	}
+	return tm.Hour()*60 + tm.Minute(), nil
+}
+
+func MinutesToClock(minutes int) string {
+	h := minutes / 60
+	m := minutes % 60
+	return fmt.Sprintf("%02d:%02d", h, m)
+}
+
 func IsDatePast(dateStr string, loc *time.Location, now time.Time) (bool, error) {
 	date, err := ParseDate(dateStr, loc)
 	if err != nil {
@@ -71,9 +87,16 @@ func dayRanges(day time.Weekday) []TimeRange {
 }
 
 func GenerateSlots(dateStr string, loc *time.Location) ([]string, error) {
+	return GenerateSlotsWithDuration(dateStr, SlotMinutes, loc)
+}
+
+func GenerateSlotsWithDuration(dateStr string, duration int, loc *time.Location) ([]string, error) {
 	date, err := ParseDate(dateStr, loc)
 	if err != nil {
 		return nil, err
+	}
+	if duration <= 0 {
+		return nil, ErrInvalidDuration
 	}
 
 	ranges := dayRanges(date.Weekday())
@@ -83,17 +106,17 @@ func GenerateSlots(dateStr string, loc *time.Location) ([]string, error) {
 
 	slots := make([]string, 0)
 	for _, tr := range ranges {
-		start, err := ParseDateTime(dateStr, tr.Start, loc)
+		startMin, err := ParseClockToMinutes(tr.Start)
 		if err != nil {
 			return nil, err
 		}
-		end, err := ParseDateTime(dateStr, tr.End, loc)
+		endMin, err := ParseClockToMinutes(tr.End)
 		if err != nil {
 			return nil, err
 		}
 
-		for cursor := start; cursor.Add(time.Minute*SlotMinutes).Equal(end) || cursor.Add(time.Minute*SlotMinutes).Before(end); cursor = cursor.Add(time.Minute * SlotMinutes) {
-			slots = append(slots, cursor.Format("15:04"))
+		for cursor := startMin; cursor+duration <= endMin; cursor += duration {
+			slots = append(slots, MinutesToClock(cursor))
 		}
 	}
 
@@ -125,7 +148,7 @@ func FilterPastSlots(dateStr string, slots []string, loc *time.Location, now tim
 }
 
 func IsSlotAllowed(dateStr, timeStr string, loc *time.Location) (bool, error) {
-	slots, err := GenerateSlots(dateStr, loc)
+	slots, err := GenerateSlotsWithDuration(dateStr, SlotMinutes, loc)
 	if err != nil {
 		return false, err
 	}
@@ -135,6 +158,50 @@ func IsSlotAllowed(dateStr, timeStr string, loc *time.Location) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func IsSlotAllowedWithDuration(dateStr, timeStr string, duration int, loc *time.Location) (bool, error) {
+	slots, err := GenerateSlotsWithDuration(dateStr, duration, loc)
+	if err != nil {
+		return false, err
+	}
+	for _, s := range slots {
+		if s == timeStr {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+type Interval struct {
+	Start int
+	End   int
+}
+
+func Overlaps(a, b Interval) bool {
+	return a.Start < b.End && b.Start < a.End
+}
+
+func FilterOverlapping(slots []string, duration int, reserved []Interval) ([]string, error) {
+	filtered := make([]string, 0, len(slots))
+	for _, s := range slots {
+		start, err := ParseClockToMinutes(s)
+		if err != nil {
+			return nil, err
+		}
+		current := Interval{Start: start, End: start + duration}
+		overlap := false
+		for _, r := range reserved {
+			if Overlaps(current, r) {
+				overlap = true
+				break
+			}
+		}
+		if !overlap {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered, nil
 }
 
 func IsSlotAvailable(dateStr, timeStr string, loc *time.Location, now time.Time, reserved map[string]bool) (bool, error) {

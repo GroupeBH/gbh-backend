@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"reflect"
 	"regexp"
 	"time"
 
@@ -39,6 +40,14 @@ func New() *Validator {
 			return false
 		}
 		return phoneRegex.MatchString(value)
+	})
+
+	v.RegisterValidation("minutes15", func(fl validator.FieldLevel) bool {
+		if fl.Field().Kind() != reflect.Int && fl.Field().Kind() != reflect.Int32 && fl.Field().Kind() != reflect.Int64 {
+			return false
+		}
+		val := fl.Field().Int()
+		return val > 0 && val%15 == 0
 	})
 
 	return &Validator{v: v}

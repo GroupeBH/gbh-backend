@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strconv"
 )
 
 func extractInt(value interface{}) int {
@@ -28,4 +30,18 @@ func writeCachedJSON(w http.ResponseWriter, status int, payload []byte) {
 
 func encodeJSON(payload interface{}) ([]byte, error) {
 	return json.Marshal(payload)
+}
+
+func parseDurationParam(value string, fallback int) (int, error) {
+	if value == "" {
+		return fallback, nil
+	}
+	v, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, errors.New("invalid duration")
+	}
+	if v < 15 || v > 240 || v%15 != 0 {
+		return 0, errors.New("invalid duration")
+	}
+	return v, nil
 }

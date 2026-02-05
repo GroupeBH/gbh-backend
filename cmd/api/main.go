@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"gbh-backend/internal/auth"
 	"gbh-backend/internal/cache"
 	"gbh-backend/internal/config"
 	"gbh-backend/internal/db"
@@ -36,6 +37,7 @@ func main() {
 		logger.Error("mongo connection failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+	logger.Info("mongo connected")
 	defer client.Disconnect(context.Background())
 
 	if err := db.EnsureIndexes(ctx, cols); err != nil {
@@ -44,13 +46,38 @@ func main() {
 	}
 
 	var cacheStore cache.Cache = cache.NewNoop()
-	if cfg.RedisAddr != "" {
-		redisCache := cache.NewRedis(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	if cfg.RedisURL != "" || cfg.RedisAddr != "" {
+		var redisCache *cache.RedisCache
+		var err error
+		if cfg.RedisURL != "" {
+			redisCache, err = cache.NewRedisFromURL(cfg.RedisURL)
+		} else {
+			redisCache = cache.NewRedis(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+		}
+		if err != nil {
+			logger.Error("redis connection failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
 		if err := redisCache.Ping(ctx); err != nil {
 			logger.Error("redis connection failed", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
+		if cfg.RedisURL != "" {
+			logger.Info("redis connected (url)")
+		} else {
+			logger.Info("redis connected", slog.String("addr", cfg.RedisAddr))
+		}
 		cacheStore = redisCache
+	}
+
+	var jwtManager *auth.Manager
+	if cfg.JWTSecret != "" {
+		jwtManager = &auth.Manager{
+			Secret:     []byte(cfg.JWTSecret),
+			AccessTTL:  time.Duration(cfg.AccessTTLMinutes) * time.Minute,
+			RefreshTTL: time.Duration(cfg.RefreshTTLMinutes) * time.Minute,
+			Issuer:     "gbh-backend",
+		}
 	}
 
 	server := &handlers.Server{
@@ -64,6 +91,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(chiMiddleware.RealIP)
 	r.Use(chiMiddleware.Recoverer)
+	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger(logger))
 	r.Use(middleware.CORS(cfg.FrontendOrigin))
 	r.Use(chiMiddleware.Timeout(30 * time.Second))
@@ -71,14 +99,35 @@ func main() {
 	appointmentsLimiter := middleware.NewRateLimiter(cfg.RateLimitAppointments, time.Duration(cfg.RateLimitWindowSec)*time.Second)
 	contactLimiter := middleware.NewRateLimiter(cfg.RateLimitContact, time.Duration(cfg.RateLimitWindowSec)*time.Second)
 
-	r.Route("/api", func(api chi.Router) {
+	registerAPIRoutes := func(api chi.Router) {
 		api.Get("/services", server.GetServices)
+		api.Get("/services/{id}/availability", server.GetServiceAvailability)
 		api.Get("/availability", server.GetAvailability)
+		api.Get("/availability/next", server.GetNextAvailability)
 		api.With(appointmentsLimiter.Middleware).Post("/appointments", server.CreateAppointment)
 		api.Get("/appointments/{id}", server.GetAppointment)
 		api.With(contactLimiter.Middleware).Post("/contact", server.CreateContact)
 		api.Post("/payments/intent", server.CreatePaymentIntent)
-	})
+
+		api.Route("/admin", func(admin chi.Router) {
+			admin.Post("/login", server.AdminLogin)
+			admin.Post("/refresh", server.AdminRefresh)
+			admin.Post("/logout", server.AdminLogout)
+			admin.Use(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager))
+			admin.Post("/services", server.AdminCreateService)
+			admin.Put("/services/{id}", server.AdminUpdateService)
+			admin.Delete("/services/{id}", server.AdminDeleteService)
+			admin.Post("/blocks", server.AdminCreateBlock)
+			admin.Delete("/blocks/{id}", server.AdminDeleteBlock)
+			admin.Get("/appointments", server.AdminListAppointments)
+			admin.Patch("/appointments/{id}/status", server.AdminUpdateAppointmentStatus)
+			admin.Get("/contacts", server.AdminListContacts)
+		})
+	}
+
+	// Supporte /api/... (normal) ET /api/api/... (front mal configuré / legacy).
+	r.Route("/api", registerAPIRoutes)
+	r.Route("/api/api", registerAPIRoutes)
 
 	srv := &http.Server{
 		Addr:    cfg.ServerAddr,

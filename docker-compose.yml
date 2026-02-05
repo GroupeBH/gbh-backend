@@ -21,17 +21,25 @@ services:
     environment:
       - APP_ENV=production
       - SERVER_ADDR=:8080
-      - MONGO_URI=mongodb://mongo:27017
-      - MONGO_DB=gbh
+      - MONGO_URI=mongodb://mongo:27017/gbh
+      - MONGO_DB=
       - FRONTEND_ORIGIN=http://localhost:3000
       - RATE_LIMIT_APPOINTMENTS=10
       - RATE_LIMIT_CONTACT=5
       - RATE_LIMIT_WINDOW_SEC=60
       - TZ=Africa/Kinshasa
+      - REDIS_URL=redis://redis:6379/0
       - REDIS_ADDR=redis:6379
       - REDIS_PASSWORD=
       - REDIS_DB=0
       - CACHE_TTL_SECONDS=60
+      - ADMIN_API_KEY=change-me
+      - ADMIN_USER=admin
+      - ADMIN_PASSWORD=change-me-too
+      - JWT_SECRET=change-this-secret
+      - ACCESS_TTL_MINUTES=15
+      - REFRESH_TTL_MINUTES=43200
+      - COOKIE_SECURE=false
     ports:
       - "8080:8080"
     depends_on:

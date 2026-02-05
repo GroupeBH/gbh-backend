@@ -1,7 +1,7 @@
 ﻿openapi: 3.0.3
 info:
   title: GBH Backend API
-  version: 1.0.0
+  version: 1.3.0
   description: API REST JSON pour Groupe B-Holding Sarl (GBH).
 servers:
   - url: http://localhost:8080
@@ -21,6 +21,46 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Service'
+  /api/services/{id}/availability:
+    get:
+      summary: Disponibilités par service et date
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+            example: 2026-02-04
+        - in: query
+          name: duration
+          required: false
+          schema:
+            type: integer
+            example: 30
+      responses:
+        "200":
+          description: Liste des créneaux disponibles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        "400":
+          description: Requête invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "404":
+          description: Service non trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/availability:
     get:
       summary: Disponibilités par date
@@ -31,6 +71,12 @@ paths:
           schema:
             type: string
             example: 2026-02-04
+        - in: query
+          name: duration
+          required: false
+          schema:
+            type: integer
+            example: 30
       responses:
         "200":
           description: Liste des créneaux disponibles
@@ -40,6 +86,35 @@ paths:
                 $ref: '#/components/schemas/Availability'
         "400":
           description: Requête invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/availability/next:
+    get:
+      summary: Prochain créneau disponible
+      parameters:
+        - in: query
+          name: from
+          required: false
+          schema:
+            type: string
+            example: 2026-02-04
+        - in: query
+          name: duration
+          required: false
+          schema:
+            type: integer
+            example: 30
+      responses:
+        "200":
+          description: Prochain créneau
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NextAvailability'
+        "404":
+          description: Aucun créneau trouvé
           content:
             application/json:
               schema:
@@ -59,7 +134,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Appointment'
+                $ref: '#/components/schemas/AppointmentCreateResponse'
         "409":
           description: Créneau déjà réservé
           content:
@@ -120,7 +195,224 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentIntent'
+  /api/admin/login:
+    post:
+      summary: Login admin (cookies JWT)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLogin'
+      responses:
+        "200":
+          description: Login OK
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Cookies gbh_access et gbh_refresh
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAuthResponse'
+  /api/admin/refresh:
+    post:
+      summary: Refresh admin (cookies JWT)
+      responses:
+        "200":
+          description: Refresh OK
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Cookies gbh_access et gbh_refresh
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAuthResponse'
+  /api/admin/logout:
+    post:
+      summary: Logout admin (cookies JWT)
+      responses:
+        "200":
+          description: Logout OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAuthResponse'
+  /api/admin/services:
+    post:
+      summary: Créer un service (admin)
+      security:
+        - AdminKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminService'
+      responses:
+        "201":
+          description: Service créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+  /api/admin/services/{id}:
+    put:
+      summary: Mettre à jour un service (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminService'
+      responses:
+        "200":
+          description: Service mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+    delete:
+      summary: Supprimer un service (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Suppression OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+  /api/admin/blocks:
+    post:
+      summary: Créer un blocage de créneau (admin)
+      security:
+        - AdminKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminBlock'
+      responses:
+        "201":
+          description: Blocage créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationBlock'
+  /api/admin/blocks/{id}:
+    delete:
+      summary: Supprimer un blocage (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Suppression OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+  /api/admin/appointments:
+    get:
+      summary: Lister les rendez-vous (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: query
+          name: date
+          required: false
+          schema:
+            type: string
+            example: 2026-02-04
+      responses:
+        "200":
+          description: Liste des rendez-vous
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  appointments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Appointment'
+  /api/admin/appointments/{id}/status:
+    patch:
+      summary: Changer le statut d'un rendez-vous (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminStatus'
+      responses:
+        "200":
+          description: Statut mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+  /api/admin/contacts:
+    get:
+      summary: Lister les messages de contact (admin)
+      security:
+        - AdminKey: []
+      responses:
+        "200":
+          description: Liste des messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contacts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ContactMessage'
 components:
+  securitySchemes:
+    AdminKey:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
   schemas:
     Service:
       type: object
@@ -143,15 +435,39 @@ components:
     Availability:
       type: object
       properties:
+        serviceId:
+          type: string
         date:
           type: string
         timezone:
           type: string
+        duration:
+          type: integer
         slots:
           type: array
           items:
             type: string
             example: 09:00
+    NextAvailability:
+      type: object
+      properties:
+        date:
+          type: string
+        time:
+          type: string
+        timezone:
+          type: string
+        duration:
+          type: integer
+    AppointmentCreateResponse:
+      type: object
+      properties:
+        appointment:
+          $ref: '#/components/schemas/Appointment'
+        availableSlots:
+          type: array
+          items:
+            type: string
     AppointmentCreate:
       type: object
       required:
@@ -181,6 +497,9 @@ components:
         time:
           type: string
           example: 14:45
+        duration:
+          type: integer
+          example: 30
         paymentMethod:
           type: string
           enum: [online, place]
@@ -259,6 +578,20 @@ components:
         createdAt:
           type: string
           format: date-time
+    ReservationBlock:
+      type: object
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+        time:
+          type: string
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
     PaymentIntentRequest:
       type: object
       required:
@@ -281,6 +614,63 @@ components:
           example: CDF
         method:
           type: string
+    AdminLogin:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    AdminAuthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+    AdminService:
+      type: object
+      required:
+        - name
+        - description
+        - category
+        - forAudience
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        forAudience:
+          type: string
+        slug:
+          type: string
+    AdminBlock:
+      type: object
+      required:
+        - date
+        - time
+        - reason
+      properties:
+        date:
+          type: string
+          example: 2026-02-04
+        time:
+          type: string
+          example: 09:00
+        reason:
+          type: string
+    AdminStatus:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [booked, canceled]
     Error:
       type: object
       properties:
