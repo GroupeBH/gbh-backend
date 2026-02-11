@@ -24,6 +24,7 @@ services:
       - MONGO_URI=mongodb://mongo:27017/gbh
       - MONGO_DB=
       - FRONTEND_ORIGIN=http://localhost:3000
+      - FRONTEND_ORIGINS=http://localhost:3000
       - RATE_LIMIT_APPOINTMENTS=10
       - RATE_LIMIT_CONTACT=5
       - RATE_LIMIT_WINDOW_SEC=60

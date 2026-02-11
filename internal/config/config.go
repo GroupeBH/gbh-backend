@@ -9,27 +9,31 @@ import (
 )
 
 type Config struct {
-	Env                 string
-	MongoURI            string
-	MongoDB             string
-	ServerAddr          string
-	FrontendOrigin      string
+	Env                   string
+	MongoURI              string
+	MongoDB               string
+	ServerAddr            string
+	FrontendOrigins       []string
 	RateLimitAppointments int
 	RateLimitContact      int
 	RateLimitWindowSec    int
-	RedisURL            string
-	RedisAddr           string
-	RedisPassword       string
-	RedisDB             int
-	CacheTTLSeconds     int
-	AdminAPIKey         string
-	AdminUser           string
-	AdminPassword       string
-	JWTSecret           string
-	AccessTTLMinutes    int
-	RefreshTTLMinutes   int
-	CookieSecure        bool
-	Timezone            *time.Location
+	RedisURL              string
+	RedisAddr             string
+	RedisPassword         string
+	RedisDB               int
+	CacheTTLSeconds       int
+	AdminAPIKey           string
+	AdminUser             string
+	AdminPassword         string
+	JWTSecret             string
+	AccessTTLMinutes      int
+	RefreshTTLMinutes     int
+	CookieSecure          bool
+	Timezone              *time.Location
+	BrevoAPIKey           string
+	BrevoSenderEmail      string
+	BrevoSenderName       string
+	BrevoSandbox          bool
 }
 
 func getEnv(key, fallback string) string {
@@ -64,12 +68,17 @@ func Load() (*Config, error) {
 		mongoDB = "gbh"
 	}
 
+	frontendOrigins := parseOrigins(getEnv("FRONTEND_ORIGINS", ""))
+	if len(frontendOrigins) == 0 {
+		frontendOrigins = parseOrigins(getEnv("FRONTEND_ORIGIN", "http://localhost:3000"))
+	}
+
 	cfg := &Config{
 		Env:                   getEnv("APP_ENV", "development"),
 		MongoURI:              mongoURI,
 		MongoDB:               mongoDB,
 		ServerAddr:            getEnv("SERVER_ADDR", ":8080"),
-		FrontendOrigin:        getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
+		FrontendOrigins:       frontendOrigins,
 		RateLimitAppointments: getEnvInt("RATE_LIMIT_APPOINTMENTS", 10),
 		RateLimitContact:      getEnvInt("RATE_LIMIT_CONTACT", 5),
 		RateLimitWindowSec:    getEnvInt("RATE_LIMIT_WINDOW_SEC", 60),
@@ -86,9 +95,29 @@ func Load() (*Config, error) {
 		RefreshTTLMinutes:     getEnvInt("REFRESH_TTL_MINUTES", 43200),
 		CookieSecure:          getEnv("COOKIE_SECURE", "false") == "true",
 		Timezone:              loc,
+		BrevoAPIKey:           getEnv("BREVO_API_KEY", ""),
+		BrevoSenderEmail:      getEnv("BREVO_SENDER_EMAIL", ""),
+		BrevoSenderName:       getEnv("BREVO_SENDER_NAME", ""),
+		BrevoSandbox:          getEnv("BREVO_SANDBOX", "false") == "true",
 	}
 
 	return cfg, nil
+}
+
+func parseOrigins(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		p = strings.TrimRight(p, "/")
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func mongoDBFromURI(uri string) string {

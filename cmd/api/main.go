@@ -16,6 +16,7 @@ import (
 	"gbh-backend/internal/db"
 	"gbh-backend/internal/handlers"
 	"gbh-backend/internal/middleware"
+	"gbh-backend/internal/notifications"
 	"gbh-backend/internal/validation"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -80,12 +81,20 @@ func main() {
 		}
 	}
 
+	mailer := notifications.NewBrevoClient(cfg.BrevoAPIKey, cfg.BrevoSenderEmail, cfg.BrevoSenderName, cfg.BrevoSandbox)
+	if mailer == nil {
+		logger.Info("brevo mailer disabled")
+	} else {
+		logger.Info("brevo mailer enabled", slog.String("sender", cfg.BrevoSenderEmail), slog.Bool("sandbox", cfg.BrevoSandbox))
+	}
+
 	server := &handlers.Server{
-		Cfg:  cfg,
-		Cols: cols,
-		Val:  validation.New(),
-		Log:  logger,
-		Cache: cacheStore,
+		Cfg:    cfg,
+		Cols:   cols,
+		Val:    validation.New(),
+		Log:    logger,
+		Cache:  cacheStore,
+		Mailer: mailer,
 	}
 
 	r := chi.NewRouter()
@@ -93,7 +102,7 @@ func main() {
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger(logger))
-	r.Use(middleware.CORS(cfg.FrontendOrigin))
+	r.Use(middleware.CORS(cfg.FrontendOrigins))
 	r.Use(chiMiddleware.Timeout(30 * time.Second))
 
 	appointmentsLimiter := middleware.NewRateLimiter(cfg.RateLimitAppointments, time.Duration(cfg.RateLimitWindowSec)*time.Second)

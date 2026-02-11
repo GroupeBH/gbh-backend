@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -9,7 +10,6 @@ import (
 	"gbh-backend/internal/schedule"
 	"gbh-backend/internal/transport"
 	"github.com/go-chi/chi/v5"
-	"log/slog"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -90,7 +90,8 @@ func (s *Server) CreateAppointment(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
 
-	if err := s.Cols.Services.FindOne(ctx, bson.M{"_id": req.ServiceID}).Err(); err != nil {
+	var service models.Service
+	if err := s.Cols.Services.FindOne(ctx, bson.M{"_id": req.ServiceID}).Decode(&service); err != nil {
 		if err == mongo.ErrNoDocuments {
 			log.Warn("appointments create: service not found", slog.String("service_id", req.ServiceID))
 			transport.WriteError(w, http.StatusBadRequest, "service not found", nil)
@@ -157,6 +158,12 @@ func (s *Server) CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		_ = s.Cache.DeletePrefix(r.Context(), "availability:"+req.Date+":")
 	}
 
+	if s.Mailer != nil {
+		appointmentCopy := appointment
+		serviceCopy := service
+		go s.sendAppointmentConfirmationEmail(log, appointmentCopy, serviceCopy)
+	}
+
 	log.Info("appointments create: booked",
 		slog.String("appointment_id", appointment.ID),
 		slog.String("service_id", appointment.ServiceID),
@@ -171,6 +178,30 @@ func (s *Server) CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		"appointment":    appointment,
 		"availableSlots": availableSlots,
 	})
+}
+
+func (s *Server) sendAppointmentConfirmationEmail(log *slog.Logger, appointment models.Appointment, service models.Service) {
+	if s.Mailer == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	messageID, err := s.Mailer.SendAppointmentConfirmation(ctx, appointment, service)
+	if err != nil {
+		log.Warn("appointments email: send failed",
+			slog.String("appointment_id", appointment.ID),
+			slog.String("email", appointment.Email),
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	log.Info("appointments email: sent",
+		slog.String("appointment_id", appointment.ID),
+		slog.String("email", appointment.Email),
+		slog.String("message_id", messageID),
+	)
 }
 
 func (s *Server) GetAppointment(w http.ResponseWriter, r *http.Request) {
@@ -200,4 +231,3 @@ func (s *Server) GetAppointment(w http.ResponseWriter, r *http.Request) {
 	log.Info("appointments get: ok", slog.String("appointment_id", id))
 	transport.WriteJSON(w, http.StatusOK, normalizeID(doc))
 }
-
