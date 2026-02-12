@@ -18,6 +18,7 @@ import (
 	"gbh-backend/internal/middleware"
 	"gbh-backend/internal/notifications"
 	"gbh-backend/internal/validation"
+
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 )
@@ -111,6 +112,11 @@ func main() {
 	registerAPIRoutes := func(api chi.Router) {
 		api.Get("/services", server.GetServices)
 		api.Get("/services/{id}/availability", server.GetServiceAvailability)
+		api.Group(func(protected chi.Router) {
+			protected.Use(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager))
+			protected.Post("/services", server.AdminCreateService)
+			protected.Put("/services/{id}", server.AdminUpdateService)
+		})
 		api.Get("/availability", server.GetAvailability)
 		api.Get("/availability/next", server.GetNextAvailability)
 		api.With(appointmentsLimiter.Middleware).Post("/appointments", server.CreateAppointment)

@@ -21,6 +21,47 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Service'
+    post:
+      summary: Créer un service (admin)
+      security:
+        - AdminKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminService'
+      responses:
+        "201":
+          description: Service créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+  /api/services/{id}:
+    put:
+      summary: Mettre à jour un service (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminService'
+      responses:
+        "200":
+          description: Service mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
   /api/services/{id}/availability:
     get:
       summary: Disponibilités par service et date

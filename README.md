@@ -51,6 +51,8 @@ go run ./cmd/seed
 
 ## Endpoints principaux
 - `GET /api/services`
+- `POST /api/services` (admin)
+- `PUT /api/services/{id}` (admin)
 - `GET /api/services/{id}/availability?date=YYYY-MM-DD&duration=30`
 - `GET /api/availability?date=YYYY-MM-DD`
 - `GET /api/availability/next?from=YYYY-MM-DD&duration=30`
@@ -100,7 +102,11 @@ go test ./...
 - `CACHE_TTL_SECONDS`
 - `ADMIN_API_KEY`
 - `ADMIN_USER` (seed admin)
+- `ADMIN_EMAIL` (email admin optionnel)
 - `ADMIN_PASSWORD` (seed admin)
+- `ADMIN_USER_2` (seed admin optionnel)
+- `ADMIN_EMAIL_2` (email admin optionnel)
+- `ADMIN_PASSWORD_2` (seed admin optionnel)
 - `JWT_SECRET`
 - `ACCESS_TTL_MINUTES`
 - `REFRESH_TTL_MINUTES`

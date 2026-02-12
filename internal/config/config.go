@@ -3,6 +3,7 @@ package config
 import (
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -138,6 +139,11 @@ func mongoDBFromURI(uri string) string {
 
 func loadDotEnv(path string) {
 	data, err := os.ReadFile(path)
+	if err != nil && !filepath.IsAbs(path) {
+		if alt := findEnvFile(path); alt != "" {
+			data, err = os.ReadFile(alt)
+		}
+	}
 	if err != nil {
 		return
 	}
@@ -161,4 +167,34 @@ func loadDotEnv(path string) {
 		}
 		_ = os.Setenv(key, val)
 	}
+}
+
+func findEnvFile(name string) string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	dir := wd
+	for {
+		envPath := filepath.Join(dir, name)
+		if fileExists(envPath) {
+			return envPath
+		}
+		if fileExists(filepath.Join(dir, "go.mod")) {
+			return ""
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"gbh-backend/internal/auth"
@@ -10,6 +11,7 @@ import (
 	"gbh-backend/internal/db"
 	"gbh-backend/internal/models"
 	"gbh-backend/internal/utils"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -20,6 +22,12 @@ type seedService struct {
 	Description string
 	Category    string
 	ForAudience string
+}
+
+type seedUser struct {
+	Username    string
+	Email       string
+	PasswordEnv string
 }
 
 func main() {
@@ -75,16 +83,34 @@ func main() {
 		}
 	}
 
-	if cfg.AdminPassword != "" {
-		if err := seedAdminUser(ctx, cols, cfg.AdminUser, cfg.AdminPassword, cfg.Timezone); err != nil {
-			log.Fatalf("seed admin error: %v", err)
+	adminUsers := []seedUser{
+		{
+			Username:    envOrDefault("ADMIN_USER", "admin"),
+			Email:       envOrDefault("ADMIN_EMAIL", ""),
+			PasswordEnv: "ADMIN_PASSWORD",
+		},
+		{
+			Username:    envOrDefault("ADMIN_USER_2", "admin2"),
+			Email:       envOrDefault("ADMIN_EMAIL_2", ""),
+			PasswordEnv: "ADMIN_PASSWORD_2",
+		},
+	}
+
+	for _, admin := range adminUsers {
+		password := os.Getenv(admin.PasswordEnv)
+		if password == "" {
+			log.Printf("seed admin: %s missing, skipping (%s)", admin.Username, admin.PasswordEnv)
+			continue
+		}
+		if err := seedAdminUser(ctx, cols, admin.Username, admin.Email, password, cfg.Timezone); err != nil {
+			log.Fatalf("seed admin error for %s: %v", admin.Username, err)
 		}
 	}
 
 	log.Println("seed completed")
 }
 
-func seedAdminUser(ctx context.Context, cols *db.Collections, username, password string, loc *time.Location) error {
+func seedAdminUser(ctx context.Context, cols *db.Collections, username, email, password string, loc *time.Location) error {
 	if cols == nil || cols.Users == nil {
 		return nil
 	}
@@ -97,18 +123,33 @@ func seedAdminUser(ctx context.Context, cols *db.Collections, username, password
 	}
 	now := time.Now().In(loc)
 	filter := bson.M{"username": username}
+	set := bson.M{
+		"passwordHash": hash,
+		"role":         models.UserRoleAdmin,
+		"updatedAt":    now,
+	}
+	if email != "" {
+		set["email"] = email
+	}
+	setOnInsert := bson.M{
+		"_id":       primitive.NewObjectID().Hex(),
+		"username":  username,
+		"createdAt": now,
+	}
+	if email != "" {
+		setOnInsert["email"] = email
+	}
 	update := bson.M{
-		"$set": bson.M{
-			"passwordHash": hash,
-			"role":         models.UserRoleAdmin,
-			"updatedAt":    now,
-		},
-		"$setOnInsert": bson.M{
-			"_id":       primitive.NewObjectID().Hex(),
-			"username":  username,
-			"createdAt": now,
-		},
+		"$set":         set,
+		"$setOnInsert": setOnInsert,
 	}
 	_, err = cols.Users.UpdateOne(ctx, filter, update, options.Update().SetUpsert(true))
 	return err
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
