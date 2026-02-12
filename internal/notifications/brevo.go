@@ -32,6 +32,7 @@ func NewBrevoClient(apiKey, senderEmail, senderName string, sandbox bool) *Brevo
 	if strings.TrimSpace(senderName) == "" {
 		senderName = senderEmail
 	}
+	fmt.Println("brevo api keys:", apiKey)
 	return &BrevoClient{
 		apiKey:      apiKey,
 		senderEmail: senderEmail,

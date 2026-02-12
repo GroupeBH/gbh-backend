@@ -1,12 +1,14 @@
-﻿package main
+package main
 
 import (
 	"context"
 	"log"
 	"time"
 
+	"gbh-backend/internal/auth"
 	"gbh-backend/internal/config"
 	"gbh-backend/internal/db"
+	"gbh-backend/internal/models"
 	"gbh-backend/internal/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -73,5 +75,40 @@ func main() {
 		}
 	}
 
+	if cfg.AdminPassword != "" {
+		if err := seedAdminUser(ctx, cols, cfg.AdminUser, cfg.AdminPassword, cfg.Timezone); err != nil {
+			log.Fatalf("seed admin error: %v", err)
+		}
+	}
+
 	log.Println("seed completed")
+}
+
+func seedAdminUser(ctx context.Context, cols *db.Collections, username, password string, loc *time.Location) error {
+	if cols == nil || cols.Users == nil {
+		return nil
+	}
+	if username == "" || password == "" {
+		return nil
+	}
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return err
+	}
+	now := time.Now().In(loc)
+	filter := bson.M{"username": username}
+	update := bson.M{
+		"$set": bson.M{
+			"passwordHash": hash,
+			"role":         models.UserRoleAdmin,
+			"updatedAt":    now,
+		},
+		"$setOnInsert": bson.M{
+			"_id":       primitive.NewObjectID().Hex(),
+			"username":  username,
+			"createdAt": now,
+		},
+	}
+	_, err = cols.Users.UpdateOne(ctx, filter, update, options.Update().SetUpsert(true))
+	return err
 }

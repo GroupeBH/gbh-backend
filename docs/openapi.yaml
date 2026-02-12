@@ -342,6 +342,57 @@ paths:
                 properties:
                   status:
                     type: string
+  /api/admin/users:
+    post:
+      summary: Créer un utilisateur admin
+      security:
+        - AdminKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserCreate'
+      responses:
+        "201":
+          description: Utilisateur créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        "409":
+          description: Doublon username/email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/admin/users/{id}/password:
+    patch:
+      summary: Changer le mot de passe d'un admin
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserPassword'
+      responses:
+        "200":
+          description: Mot de passe mis à jour
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
   /api/admin/appointments:
     get:
       summary: Lister les rendez-vous (admin)
@@ -671,6 +722,42 @@ components:
         status:
           type: string
           enum: [booked, canceled]
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AdminUserCreate:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+    AdminUserPassword:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
     Error:
       type: object
       properties:

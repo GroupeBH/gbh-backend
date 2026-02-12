@@ -1,12 +1,16 @@
-﻿package handlers
+package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"gbh-backend/internal/auth"
+	"gbh-backend/internal/models"
 	"gbh-backend/internal/transport"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type AdminLoginRequest struct {
@@ -33,13 +37,35 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.Cfg.AdminPassword == "" || s.Cfg.JWTSecret == "" {
+	if s.Cfg.JWTSecret == "" || s.Cols == nil || s.Cols.Users == nil {
 		log.Warn("admin login: not configured")
 		transport.WriteError(w, http.StatusServiceUnavailable, "admin auth not configured", nil)
 		return
 	}
 
-	if req.Username != s.Cfg.AdminUser || req.Password != s.Cfg.AdminPassword {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var user models.User
+	filter := bson.M{
+		"role": models.UserRoleAdmin,
+		"$or": []bson.M{
+			{"username": req.Username},
+			{"email": req.Username},
+		},
+	}
+	if err := s.Cols.Users.FindOne(ctx, filter).Decode(&user); err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Warn("admin login: invalid credentials", slog.String("username", req.Username))
+			transport.WriteError(w, http.StatusUnauthorized, "invalid credentials", nil)
+			return
+		}
+		log.Error("admin login: database error", slog.String("error", err.Error()))
+		transport.WriteError(w, http.StatusInternalServerError, "database error", nil)
+		return
+	}
+
+	if err := auth.ComparePassword(user.PasswordHash, req.Password); err != nil {
 		log.Warn("admin login: invalid credentials", slog.String("username", req.Username))
 		transport.WriteError(w, http.StatusUnauthorized, "invalid credentials", nil)
 		return

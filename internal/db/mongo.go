@@ -14,6 +14,7 @@ type Collections struct {
 	Appointments      *mongo.Collection
 	ContactMessages   *mongo.Collection
 	ReservationBlocks *mongo.Collection
+	Users             *mongo.Collection
 }
 
 func Connect(ctx context.Context, uri, dbName string) (*mongo.Client, *Collections, error) {
@@ -33,6 +34,7 @@ func Connect(ctx context.Context, uri, dbName string) (*mongo.Client, *Collectio
 		Appointments:      db.Collection("appointments"),
 		ContactMessages:   db.Collection("contact_messages"),
 		ReservationBlocks: db.Collection("reservation_blocks"),
+		Users:             db.Collection("users"),
 	}
 
 	return client, cols, nil
@@ -68,6 +70,20 @@ func EnsureIndexes(ctx context.Context, cols *Collections) error {
 	_, err = cols.ReservationBlocks.Indexes().CreateMany(indexTimeout, []mongo.IndexModel{
 		{
 			Keys: bson.D{{Key: "date", Value: 1}, {Key: "time", Value: 1}},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = cols.Users.Indexes().CreateMany(indexTimeout, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "username", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{Key: "email", Value: 1}},
+			Options: options.Index().SetUnique(true).SetSparse(true),
 		},
 	})
 	if err != nil {

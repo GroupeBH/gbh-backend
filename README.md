@@ -11,7 +11,7 @@ Backend REST JSON pour l’application web **Groupe B-Holding Sarl (GBH)**.
 - Validation stricte, CORS, rate limiting, logs structurés
 - Cache Redis (services + disponibilités)
 - Endpoints admin protégés (gestion services, créneaux, rendez-vous, contacts)
-- Login admin JWT (cookies HttpOnly access + refresh)
+- Login admin JWT (cookies HttpOnly access + refresh) via la collection `users`
 
 **Règles métier**
 - Lundi–Vendredi : 09h–12h et 14h–17h
@@ -68,6 +68,8 @@ go run ./cmd/seed
 - `DELETE /api/admin/services/{id}`
 - `POST /api/admin/blocks`
 - `DELETE /api/admin/blocks/{id}`
+- `POST /api/admin/users`
+- `PATCH /api/admin/users/{id}/password`
 - `GET /api/admin/appointments?date=YYYY-MM-DD`
 - `PATCH /api/admin/appointments/{id}/status`
 - `GET /api/admin/contacts`
@@ -97,8 +99,8 @@ go test ./...
 - `REDIS_DB`
 - `CACHE_TTL_SECONDS`
 - `ADMIN_API_KEY`
-- `ADMIN_USER`
-- `ADMIN_PASSWORD`
+- `ADMIN_USER` (seed admin)
+- `ADMIN_PASSWORD` (seed admin)
 - `JWT_SECRET`
 - `ACCESS_TTL_MINUTES`
 - `REFRESH_TTL_MINUTES`

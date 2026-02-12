@@ -12,6 +12,8 @@ const (
 	AppointmentStatusPending  = "pending"
 	AppointmentStatusBooked   = "booked"
 	AppointmentStatusCanceled = "canceled"
+
+	UserRoleAdmin = "admin"
 )
 
 type Service struct {
@@ -22,6 +24,16 @@ type Service struct {
 	ForAudience string    `bson:"forAudience" json:"forAudience"`
 	Slug        string    `bson:"slug" json:"slug"`
 	CreatedAt   time.Time `bson:"createdAt" json:"createdAt"`
+}
+
+type User struct {
+	ID           string    `bson:"_id,omitempty" json:"id"`
+	Username     string    `bson:"username" json:"username"`
+	Email        string    `bson:"email,omitempty" json:"email,omitempty"`
+	PasswordHash string    `bson:"passwordHash" json:"-"`
+	Role         string    `bson:"role" json:"role"`
+	CreatedAt    time.Time `bson:"createdAt" json:"createdAt"`
+	UpdatedAt    time.Time `bson:"updatedAt" json:"updatedAt"`
 }
 
 type Appointment struct {

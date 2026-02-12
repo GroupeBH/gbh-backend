@@ -132,6 +132,8 @@ func main() {
 				protected.Delete("/services/{id}", server.AdminDeleteService)
 				protected.Post("/blocks", server.AdminCreateBlock)
 				protected.Delete("/blocks/{id}", server.AdminDeleteBlock)
+				protected.Post("/users", server.AdminCreateUser)
+				protected.Patch("/users/{id}/password", server.AdminUpdateUserPassword)
 				protected.Get("/appointments", server.AdminListAppointments)
 				protected.Patch("/appointments/{id}/status", server.AdminUpdateAppointmentStatus)
 				protected.Get("/contacts", server.AdminListContacts)
