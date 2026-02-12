@@ -71,7 +71,7 @@ func Load() (*Config, error) {
 
 	frontendOrigins := parseOrigins(getEnv("FRONTEND_ORIGINS", ""))
 	if len(frontendOrigins) == 0 {
-		frontendOrigins = parseOrigins(getEnv("FRONTEND_ORIGIN", "http://localhost:3000"))
+		frontendOrigins = parseOrigins(getEnv("FRONTEND_ORIGIN", "httpS://www.gbh.sarl"))
 	}
 
 	cfg := &Config{
