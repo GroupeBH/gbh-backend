@@ -871,10 +871,6 @@ components:
         status:
           type: string
           example: ok
-        accessToken:
-          type: string
-        refreshToken:
-          type: string
     AdminService:
       type: object
       required:

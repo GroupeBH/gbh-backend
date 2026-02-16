@@ -21,9 +21,7 @@ type AdminLoginRequest struct {
 }
 
 type AdminLoginResponse struct {
-	Status       string `json:"status"`
-	AccessToken  string `json:"accessToken,omitempty"`
-	RefreshToken string `json:"refreshToken,omitempty"`
+	Status string `json:"status"`
 }
 
 func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
@@ -82,18 +80,14 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, refreshToken, err := s.issueAdminSession(w)
+	_, _, err := s.issueAdminSession(w)
 	if err != nil {
 		log.Error("admin login: token error", slog.String("error", err.Error()))
 		transport.WriteError(w, http.StatusInternalServerError, "token error", nil)
 		return
 	}
 	log.Info("admin login: ok", slog.String("username", req.Username))
-	transport.WriteJSON(w, http.StatusOK, AdminLoginResponse{
-		Status:       "ok",
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	})
+	transport.WriteJSON(w, http.StatusOK, AdminLoginResponse{Status: "ok"})
 }
 
 func (s *Server) AdminRefresh(w http.ResponseWriter, r *http.Request) {
@@ -104,8 +98,8 @@ func (s *Server) AdminRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	refreshCookie, err := r.Cookie("gbh_refresh")
-	if err != nil || refreshCookie.Value == "" {
+	refreshToken := extractRefreshToken(r)
+	if refreshToken == "" {
 		log.Warn("admin refresh: missing refresh token")
 		transport.WriteError(w, http.StatusUnauthorized, "missing refresh token", nil)
 		return
@@ -113,25 +107,21 @@ func (s *Server) AdminRefresh(w http.ResponseWriter, r *http.Request) {
 
 	manager := s.newAdminJWTManager()
 
-	claims, err := manager.Parse(refreshCookie.Value)
+	claims, err := manager.Parse(refreshToken)
 	if err != nil || claims.Role != models.UserRoleAdmin {
 		log.Warn("admin refresh: invalid refresh token")
 		transport.WriteError(w, http.StatusUnauthorized, "invalid refresh token", nil)
 		return
 	}
 
-	accessToken, refreshToken, err := s.issueAdminSession(w)
+	_, _, err = s.issueAdminSession(w)
 	if err != nil {
 		log.Error("admin refresh: token error", slog.String("error", err.Error()))
 		transport.WriteError(w, http.StatusInternalServerError, "token error", nil)
 		return
 	}
 	log.Info("admin refresh: ok")
-	transport.WriteJSON(w, http.StatusOK, AdminLoginResponse{
-		Status:       "ok",
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	})
+	transport.WriteJSON(w, http.StatusOK, AdminLoginResponse{Status: "ok"})
 }
 
 func (s *Server) AdminLogout(w http.ResponseWriter, r *http.Request) {
@@ -213,4 +203,26 @@ func clearAuthCookies(w http.ResponseWriter, secure bool) {
 	}
 	http.SetCookie(w, accessCookie)
 	http.SetCookie(w, refreshCookie)
+}
+
+func extractRefreshToken(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if cookie, err := r.Cookie("gbh_refresh"); err == nil && strings.TrimSpace(cookie.Value) != "" {
+		return strings.TrimSpace(cookie.Value)
+	}
+	return extractBearerToken(r.Header.Get("Authorization"))
+}
+
+func extractBearerToken(authHeader string) string {
+	authHeader = strings.TrimSpace(authHeader)
+	if authHeader == "" {
+		return ""
+	}
+	const prefix = "Bearer "
+	if !strings.HasPrefix(authHeader, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(authHeader, prefix))
 }

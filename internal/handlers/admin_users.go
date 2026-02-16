@@ -103,17 +103,13 @@ func (s *Server) AdminRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info("admin register: ok", slog.String("user_id", user.ID), slog.String("username", user.Username))
-	accessToken, refreshToken, err := s.issueAdminSession(w)
+	_, _, err = s.issueAdminSession(w)
 	if err != nil {
 		log.Error("admin register: token error", slog.String("error", err.Error()))
 		transport.WriteError(w, http.StatusInternalServerError, "token error", nil)
 		return
 	}
-	transport.WriteJSON(w, http.StatusCreated, AdminLoginResponse{
-		Status:       "ok",
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	})
+	transport.WriteJSON(w, http.StatusCreated, AdminLoginResponse{Status: "ok"})
 }
 
 func (s *Server) AdminCreateUser(w http.ResponseWriter, r *http.Request) {

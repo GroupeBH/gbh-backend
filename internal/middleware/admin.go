@@ -1,9 +1,11 @@
-﻿package middleware
+package middleware
 
 import (
 	"net/http"
+	"strings"
 
 	"gbh-backend/internal/auth"
+	"gbh-backend/internal/models"
 	"gbh-backend/internal/transport"
 )
 
@@ -24,7 +26,15 @@ func AdminAuth(adminKey string, manager *auth.Manager) func(http.Handler) http.H
 				cookie, err := r.Cookie("gbh_access")
 				if err == nil && cookie.Value != "" {
 					claims, err := manager.Parse(cookie.Value)
-					if err == nil && claims.Role == "admin" {
+					if err == nil && claims.Role == models.UserRoleAdmin {
+						next.ServeHTTP(w, r)
+						return
+					}
+				}
+
+				if token := bearerToken(r.Header.Get("Authorization")); token != "" {
+					claims, err := manager.Parse(token)
+					if err == nil && claims.Role == models.UserRoleAdmin {
 						next.ServeHTTP(w, r)
 						return
 					}
@@ -34,4 +44,16 @@ func AdminAuth(adminKey string, manager *auth.Manager) func(http.Handler) http.H
 			transport.WriteError(w, http.StatusUnauthorized, "unauthorized", nil)
 		})
 	}
+}
+
+func bearerToken(authHeader string) string {
+	authHeader = strings.TrimSpace(authHeader)
+	if authHeader == "" {
+		return ""
+	}
+	const prefix = "Bearer "
+	if !strings.HasPrefix(authHeader, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(authHeader, prefix))
 }
