@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 func extractInt(value interface{}) int {
@@ -44,4 +45,29 @@ func parseDurationParam(value string, fallback int) (int, error) {
 		return 0, errors.New("invalid duration")
 	}
 	return v, nil
+}
+
+func normalizeStringList(items []string) []string {
+	if len(items) == 0 {
+		return []string{}
+	}
+
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		clean := strings.TrimSpace(item)
+		if clean == "" {
+			continue
+		}
+		if _, exists := seen[clean]; exists {
+			continue
+		}
+		seen[clean] = struct{}{}
+		out = append(out, clean)
+	}
+
+	if len(out) == 0 {
+		return []string{}
+	}
+	return out
 }

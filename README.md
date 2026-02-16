@@ -3,9 +3,11 @@
 Backend REST JSON pour l’application web **Groupe B-Holding Sarl (GBH)**.
 
 **Fonctionnalités**
-- Services (catalogue)
+- Services (catalogue) avec `shortDescription`, `description`, `benefits`
+- Témoignages par service
 - Disponibilités et créneaux (45 minutes)
 - Prise de rendez-vous avec gestion des conflits
+- Recherche de réservation par ID
 - Formulaire de contact
 - Simulation d’intention de paiement
 - Validation stricte, CORS, rate limiting, logs structurés
@@ -54,10 +56,13 @@ go run ./cmd/seed
 - `POST /api/services` (admin)
 - `PUT /api/services/{id}` (admin)
 - `GET /api/services/{id}/availability?date=YYYY-MM-DD&duration=30`
+- `GET /api/services/{id}/testimonials`
+- `POST /api/services/{id}/testimonials`
 - `GET /api/availability?date=YYYY-MM-DD`
 - `GET /api/availability/next?from=YYYY-MM-DD&duration=30`
 - `POST /api/appointments`
 - `GET /api/appointments/{id}`
+- `POST /api/appointments/lookup`
 - `POST /api/contact`
 - `POST /api/payments/intent`
 

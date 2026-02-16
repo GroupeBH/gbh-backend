@@ -18,10 +18,12 @@ import (
 )
 
 type seedService struct {
-	Name        string
-	Description string
-	Category    string
-	ForAudience string
+	Name             string
+	ShortDescription string
+	Description      string
+	Benefits         []string
+	Category         string
+	ForAudience      string
 }
 
 type seedUser struct {
@@ -64,16 +66,22 @@ func main() {
 
 	for _, svc := range services {
 		slug := utils.Slugify(svc.Name)
+		shortDescription := svc.ShortDescription
+		if shortDescription == "" {
+			shortDescription = svc.Description
+		}
 		filter := bson.M{"slug": slug}
 		update := bson.M{
 			"$setOnInsert": bson.M{
-				"_id":         primitive.NewObjectID().Hex(),
-				"name":        svc.Name,
-				"description": svc.Description,
-				"category":    svc.Category,
-				"forAudience": svc.ForAudience,
-				"slug":        slug,
-				"createdAt":   time.Now().In(cfg.Timezone),
+				"_id":              primitive.NewObjectID().Hex(),
+				"name":             svc.Name,
+				"shortDescription": shortDescription,
+				"description":      svc.Description,
+				"benefits":         svc.Benefits,
+				"category":         svc.Category,
+				"forAudience":      svc.ForAudience,
+				"slug":             slug,
+				"createdAt":        time.Now().In(cfg.Timezone),
 			},
 		}
 

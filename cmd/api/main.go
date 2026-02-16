@@ -112,6 +112,8 @@ func main() {
 	registerAPIRoutes := func(api chi.Router) {
 		api.Get("/services", server.GetServices)
 		api.Get("/services/{id}/availability", server.GetServiceAvailability)
+		api.Get("/services/{id}/testimonials", server.GetServiceTestimonials)
+		api.With(contactLimiter.Middleware).Post("/services/{id}/testimonials", server.CreateServiceTestimonial)
 		api.Group(func(protected chi.Router) {
 			protected.Use(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager))
 			protected.Post("/services", server.AdminCreateService)
@@ -120,6 +122,7 @@ func main() {
 		api.Get("/availability", server.GetAvailability)
 		api.Get("/availability/next", server.GetNextAvailability)
 		api.With(appointmentsLimiter.Middleware).Post("/appointments", server.CreateAppointment)
+		api.Post("/appointments/lookup", server.LookupAppointment)
 		api.Get("/appointments/{id}", server.GetAppointment)
 		api.With(contactLimiter.Middleware).Post("/contact", server.CreateContact)
 		api.Post("/payments/intent", server.CreatePaymentIntent)

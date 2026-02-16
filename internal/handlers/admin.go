@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"context"
@@ -18,11 +18,13 @@ import (
 )
 
 type AdminServiceRequest struct {
-	Name        string `json:"name" validate:"required"`
-	Description string `json:"description" validate:"required"`
-	Category    string `json:"category" validate:"required"`
-	ForAudience string `json:"forAudience" validate:"required"`
-	Slug        string `json:"slug"`
+	Name             string   `json:"name" validate:"required"`
+	ShortDescription string   `json:"shortDescription"`
+	Description      string   `json:"description" validate:"required"`
+	Benefits         []string `json:"benefits" validate:"omitempty,dive,required"`
+	Category         string   `json:"category" validate:"required"`
+	ForAudience      string   `json:"forAudience" validate:"required"`
+	Slug             string   `json:"slug"`
 }
 
 type AdminBlockRequest struct {
@@ -60,13 +62,15 @@ func (s *Server) AdminCreateService(w http.ResponseWriter, r *http.Request) {
 	}
 
 	service := models.Service{
-		ID:          primitive.NewObjectID().Hex(),
-		Name:        req.Name,
-		Description: req.Description,
-		Category:    req.Category,
-		ForAudience: req.ForAudience,
-		Slug:        slug,
-		CreatedAt:   time.Now().In(s.Cfg.Timezone),
+		ID:               primitive.NewObjectID().Hex(),
+		Name:             req.Name,
+		ShortDescription: req.ShortDescription,
+		Description:      req.Description,
+		Benefits:         normalizeStringList(req.Benefits),
+		Category:         req.Category,
+		ForAudience:      req.ForAudience,
+		Slug:             slug,
+		CreatedAt:        time.Now().In(s.Cfg.Timezone),
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -121,11 +125,13 @@ func (s *Server) AdminUpdateService(w http.ResponseWriter, r *http.Request) {
 
 	update := bson.M{
 		"$set": bson.M{
-			"name":        req.Name,
-			"description": req.Description,
-			"category":    req.Category,
-			"forAudience": req.ForAudience,
-			"slug":        slug,
+			"name":             req.Name,
+			"shortDescription": req.ShortDescription,
+			"description":      req.Description,
+			"benefits":         normalizeStringList(req.Benefits),
+			"category":         req.Category,
+			"forAudience":      req.ForAudience,
+			"slug":             slug,
 		},
 	}
 

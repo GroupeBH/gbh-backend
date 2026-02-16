@@ -1,7 +1,7 @@
 ﻿openapi: 3.0.3
 info:
   title: GBH Backend API
-  version: 1.3.0
+  version: 1.4.0
   description: API REST JSON pour Groupe B-Holding Sarl (GBH).
 servers:
   - url: http://localhost:8080
@@ -90,6 +90,66 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Availability'
+        "400":
+          description: Requête invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "404":
+          description: Service non trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/services/{id}/testimonials:
+    get:
+      summary: Lister les témoignages d'un service
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Liste des témoignages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  testimonials:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceTestimonial'
+        "404":
+          description: Service non trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Ajouter un témoignage pour un service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceTestimonialCreate'
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Témoignage créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceTestimonial'
         "400":
           description: Requête invalide
           content:
@@ -191,6 +251,28 @@ paths:
           required: true
           schema:
             type: string
+      responses:
+        "200":
+          description: Rendez-vous
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        "404":
+          description: Non trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/appointments/lookup:
+    post:
+      summary: Récupérer un rendez-vous via un ID saisi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentLookup'
       responses:
         "200":
           description: Rendez-vous
@@ -552,8 +634,14 @@ components:
           type: string
         name:
           type: string
+        shortDescription:
+          type: string
         description:
           type: string
+        benefits:
+          type: array
+          items:
+            type: string
         category:
           type: string
         forAudience:
@@ -672,6 +760,13 @@ components:
         createdAt:
           type: string
           format: date-time
+    AppointmentLookup:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
     ContactCreate:
       type: object
       required:
@@ -790,13 +885,52 @@ components:
       properties:
         name:
           type: string
+        shortDescription:
+          type: string
         description:
           type: string
+        benefits:
+          type: array
+          items:
+            type: string
         category:
           type: string
         forAudience:
           type: string
         slug:
+          type: string
+    ServiceTestimonial:
+      type: object
+      properties:
+        id:
+          type: string
+        serviceId:
+          type: string
+        name:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ServiceTestimonialCreate:
+      type: object
+      required:
+        - name
+        - rating
+        - message
+      properties:
+        name:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        message:
           type: string
     AdminBlock:
       type: object

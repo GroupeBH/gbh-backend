@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"gbh-backend/internal/models"
@@ -26,6 +27,10 @@ type CreateAppointmentRequest struct {
 	Duration      int    `json:"duration" validate:"omitempty,gte=15,lte=240,minutes15"`
 	PaymentMethod string `json:"paymentMethod" validate:"required,oneof=online place"`
 	Price         int    `json:"price" validate:"gte=0"`
+}
+
+type AppointmentLookupRequest struct {
+	ID string `json:"id" validate:"required"`
 }
 
 func (s *Server) CreateAppointment(w http.ResponseWriter, r *http.Request) {
@@ -216,8 +221,8 @@ func (s *Server) GetAppointment(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	var doc bson.M
-	if err := s.Cols.Appointments.FindOne(ctx, bson.M{"_id": id}).Decode(&doc); err != nil {
+	doc, err := s.findAppointmentByID(ctx, id)
+	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			log.Warn("appointments get: not found", slog.String("appointment_id", id))
 			transport.WriteError(w, http.StatusNotFound, "appointment not found", nil)
@@ -230,4 +235,47 @@ func (s *Server) GetAppointment(w http.ResponseWriter, r *http.Request) {
 
 	log.Info("appointments get: ok", slog.String("appointment_id", id))
 	transport.WriteJSON(w, http.StatusOK, normalizeID(doc))
+}
+
+func (s *Server) LookupAppointment(w http.ResponseWriter, r *http.Request) {
+	log := s.logWithRequest(r)
+	var req AppointmentLookupRequest
+	if err := decodeJSON(r, &req); err != nil {
+		log.Warn("appointments lookup: invalid json")
+		transport.WriteError(w, http.StatusBadRequest, "invalid json", nil)
+		return
+	}
+	req.ID = strings.TrimSpace(req.ID)
+	if err := s.Val.Struct(req); err != nil {
+		log.Warn("appointments lookup: validation error")
+		details := validationDetails(s.Val.ValidationErrors(err))
+		transport.WriteError(w, http.StatusBadRequest, "validation error", details)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	doc, err := s.findAppointmentByID(ctx, req.ID)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Warn("appointments lookup: not found", slog.String("appointment_id", req.ID))
+			transport.WriteError(w, http.StatusNotFound, "appointment not found", nil)
+			return
+		}
+		log.Error("appointments lookup: database error", slog.String("error", err.Error()))
+		transport.WriteError(w, http.StatusInternalServerError, "database error", nil)
+		return
+	}
+
+	log.Info("appointments lookup: ok", slog.String("appointment_id", req.ID))
+	transport.WriteJSON(w, http.StatusOK, normalizeID(doc))
+}
+
+func (s *Server) findAppointmentByID(ctx context.Context, id string) (bson.M, error) {
+	var doc bson.M
+	if err := s.Cols.Appointments.FindOne(ctx, bson.M{"_id": id}).Decode(&doc); err != nil {
+		return nil, err
+	}
+	return doc, nil
 }

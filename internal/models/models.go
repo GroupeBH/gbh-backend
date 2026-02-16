@@ -17,13 +17,15 @@ const (
 )
 
 type Service struct {
-	ID          string    `bson:"_id,omitempty" json:"id"`
-	Name        string    `bson:"name" json:"name"`
-	Description string    `bson:"description" json:"description"`
-	Category    string    `bson:"category" json:"category"`
-	ForAudience string    `bson:"forAudience" json:"forAudience"`
-	Slug        string    `bson:"slug" json:"slug"`
-	CreatedAt   time.Time `bson:"createdAt" json:"createdAt"`
+	ID               string    `bson:"_id,omitempty" json:"id"`
+	Name             string    `bson:"name" json:"name"`
+	ShortDescription string    `bson:"shortDescription,omitempty" json:"shortDescription,omitempty"`
+	Description      string    `bson:"description" json:"description"`
+	Benefits         []string  `bson:"benefits,omitempty" json:"benefits,omitempty"`
+	Category         string    `bson:"category" json:"category"`
+	ForAudience      string    `bson:"forAudience" json:"forAudience"`
+	Slug             string    `bson:"slug" json:"slug"`
+	CreatedAt        time.Time `bson:"createdAt" json:"createdAt"`
 }
 
 type User struct {
@@ -69,5 +71,14 @@ type ReservationBlock struct {
 	Date      string    `bson:"date" json:"date"`
 	Time      string    `bson:"time" json:"time"`
 	Reason    string    `bson:"reason" json:"reason"`
+	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
+}
+
+type ServiceTestimonial struct {
+	ID        string    `bson:"_id,omitempty" json:"id"`
+	ServiceID string    `bson:"serviceId" json:"serviceId"`
+	Name      string    `bson:"name" json:"name"`
+	Rating    int       `bson:"rating" json:"rating"`
+	Message   string    `bson:"message" json:"message"`
 	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
 }

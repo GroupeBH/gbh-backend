@@ -12,6 +12,8 @@ const appointmentConfirmationTemplate = `<!DOCTYPE html>
 <body>
   <p>Bonjour {{.Name}},</p>
   <p>Votre reservation est confirmee. Voici les details :</p>
+  <p><strong>ID de reservation : {{.AppointmentID}}</strong></p>
+  <p>Conservez cet ID. Il est necessaire pour retrouver votre rendez-vous.</p>
   <ul>
     <li>Service : {{.ServiceName}}</li>
     <li>Date : {{.Date}}</li>
@@ -21,8 +23,8 @@ const appointmentConfirmationTemplate = `<!DOCTYPE html>
     <li>Paiement : {{.PaymentLabel}}</li>
     <li>Prix : {{.Price}}</li>
     <li>Total : {{.Total}}</li>
-    <li>Numero de reservation : {{.AppointmentID}}</li>
   </ul>
+  <p>Recherche de rendez-vous : utilisez cet ID dans l'option de recherche par ID.</p>
   <p>A apporter le jour du rendez-vous :</p>
   <ul>
     <li>Carte d'identite</li>

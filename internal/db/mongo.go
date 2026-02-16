@@ -10,11 +10,12 @@ import (
 )
 
 type Collections struct {
-	Services          *mongo.Collection
-	Appointments      *mongo.Collection
-	ContactMessages   *mongo.Collection
-	ReservationBlocks *mongo.Collection
-	Users             *mongo.Collection
+	Services            *mongo.Collection
+	ServiceTestimonials *mongo.Collection
+	Appointments        *mongo.Collection
+	ContactMessages     *mongo.Collection
+	ReservationBlocks   *mongo.Collection
+	Users               *mongo.Collection
 }
 
 func Connect(ctx context.Context, uri, dbName string) (*mongo.Client, *Collections, error) {
@@ -30,11 +31,12 @@ func Connect(ctx context.Context, uri, dbName string) (*mongo.Client, *Collectio
 	db := client.Database(dbName)
 
 	cols := &Collections{
-		Services:          db.Collection("services"),
-		Appointments:      db.Collection("appointments"),
-		ContactMessages:   db.Collection("contact_messages"),
-		ReservationBlocks: db.Collection("reservation_blocks"),
-		Users:             db.Collection("users"),
+		Services:            db.Collection("services"),
+		ServiceTestimonials: db.Collection("service_testimonials"),
+		Appointments:        db.Collection("appointments"),
+		ContactMessages:     db.Collection("contact_messages"),
+		ReservationBlocks:   db.Collection("reservation_blocks"),
+		Users:               db.Collection("users"),
 	}
 
 	return client, cols, nil
@@ -70,6 +72,15 @@ func EnsureIndexes(ctx context.Context, cols *Collections) error {
 	_, err = cols.ReservationBlocks.Indexes().CreateMany(indexTimeout, []mongo.IndexModel{
 		{
 			Keys: bson.D{{Key: "date", Value: 1}, {Key: "time", Value: 1}},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = cols.ServiceTestimonials.Indexes().CreateMany(indexTimeout, []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "serviceId", Value: 1}, {Key: "createdAt", Value: -1}},
 		},
 	})
 	if err != nil {
