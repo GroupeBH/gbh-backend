@@ -24,6 +24,7 @@ type Config struct {
 	RedisDB               int
 	CacheTTLSeconds       int
 	AdminAPIKey           string
+	AdminSetupKey         string
 	AdminUser             string
 	AdminPassword         string
 	JWTSecret             string
@@ -89,6 +90,7 @@ func Load() (*Config, error) {
 		RedisDB:               getEnvInt("REDIS_DB", 0),
 		CacheTTLSeconds:       getEnvInt("CACHE_TTL_SECONDS", 60),
 		AdminAPIKey:           getEnv("ADMIN_API_KEY", ""),
+		AdminSetupKey:         getEnv("ADMIN_SETUP_KEY", ""),
 		AdminUser:             getEnv("ADMIN_USER", "admin"),
 		AdminPassword:         getEnv("ADMIN_PASSWORD", ""),
 		JWTSecret:             getEnv("JWT_SECRET", ""),

@@ -125,6 +125,7 @@ func main() {
 		api.Post("/payments/intent", server.CreatePaymentIntent)
 
 		api.Route("/admin", func(admin chi.Router) {
+			admin.Post("/register", server.AdminRegister)
 			admin.Post("/login", server.AdminLogin)
 			admin.Post("/refresh", server.AdminRefresh)
 			admin.Post("/logout", server.AdminLogout)

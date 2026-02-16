@@ -61,7 +61,9 @@ go run ./cmd/seed
 - `POST /api/contact`
 - `POST /api/payments/intent`
 
-## Endpoints admin (header `X-Admin-Key`)
+## Endpoints admin
+- La plupart des endpoints admin nécessitent `X-Admin-Key` ou un cookie JWT admin valide.
+- `POST /api/admin/register` (bootstrap via `ADMIN_SETUP_KEY`)
 - `POST /api/admin/login`
 - `POST /api/admin/refresh`
 - `POST /api/admin/logout`
@@ -101,6 +103,7 @@ go test ./...
 - `REDIS_DB`
 - `CACHE_TTL_SECONDS`
 - `ADMIN_API_KEY`
+- `ADMIN_SETUP_KEY` (clé requise pour `POST /api/admin/register`)
 - `ADMIN_USER` (seed admin)
 - `ADMIN_EMAIL` (email admin optionnel)
 - `ADMIN_PASSWORD` (seed admin)

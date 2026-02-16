@@ -236,6 +236,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentIntent'
+  /api/admin/register:
+    post:
+      summary: Inscription admin (clé de bootstrap)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRegister'
+      responses:
+        "201":
+          description: Utilisateur admin créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        "401":
+          description: Clé de bootstrap invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "409":
+          description: Doublon username/email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/admin/login:
     post:
       summary: Login admin (cookies JWT)
@@ -715,6 +743,21 @@ components:
         username:
           type: string
         password:
+          type: string
+    AdminRegister:
+      type: object
+      required:
+        - username
+        - password
+        - setupKey
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        setupKey:
           type: string
     AdminAuthResponse:
       type: object
