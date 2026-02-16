@@ -247,11 +247,16 @@ paths:
               $ref: '#/components/schemas/AdminRegister'
       responses:
         "201":
-          description: Utilisateur admin créé
+          description: Inscription et session admin créées
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Cookies gbh_access et gbh_refresh
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/AdminAuthResponse'
         "401":
           description: Clé de bootstrap invalide
           content:
@@ -260,6 +265,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         "409":
           description: Doublon username/email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "503":
+          description: Auth admin non configurée
           content:
             application/json:
               schema:
@@ -765,6 +776,10 @@ components:
         status:
           type: string
           example: ok
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
     AdminService:
       type: object
       required:

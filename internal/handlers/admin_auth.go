@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"gbh-backend/internal/auth"
@@ -11,6 +12,7 @@ import (
 	"gbh-backend/internal/transport"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type AdminLoginRequest struct {
@@ -19,7 +21,9 @@ type AdminLoginRequest struct {
 }
 
 type AdminLoginResponse struct {
-	Status string `json:"status"`
+	Status       string `json:"status"`
+	AccessToken  string `json:"accessToken,omitempty"`
+	RefreshToken string `json:"refreshToken,omitempty"`
 }
 
 func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +34,12 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 		transport.WriteError(w, http.StatusBadRequest, "invalid json", nil)
 		return
 	}
+
+	req.Username = strings.TrimSpace(req.Username)
+	if strings.Contains(req.Username, "@") {
+		req.Username = strings.ToLower(req.Username)
+	}
+
 	if err := s.Val.Struct(req); err != nil {
 		log.Warn("admin login: validation error")
 		details := validationDetails(s.Val.ValidationErrors(err))
@@ -54,7 +64,8 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 			{"email": req.Username},
 		},
 	}
-	if err := s.Cols.Users.FindOne(ctx, filter).Decode(&user); err != nil {
+	findOpts := options.FindOne().SetCollation(&options.Collation{Locale: "en", Strength: 2})
+	if err := s.Cols.Users.FindOne(ctx, filter, findOpts).Decode(&user); err != nil {
 		if err == mongo.ErrNoDocuments {
 			log.Warn("admin login: invalid credentials", slog.String("username", req.Username))
 			transport.WriteError(w, http.StatusUnauthorized, "invalid credentials", nil)
@@ -71,27 +82,18 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manager := auth.Manager{
-		Secret:     []byte(s.Cfg.JWTSecret),
-		AccessTTL:  time.Duration(s.Cfg.AccessTTLMinutes) * time.Minute,
-		RefreshTTL: time.Duration(s.Cfg.RefreshTTLMinutes) * time.Minute,
-		Issuer:     "gbh-backend",
-	}
-
-	accessToken, err := manager.NewAccessToken("admin")
+	accessToken, refreshToken, err := s.issueAdminSession(w)
 	if err != nil {
+		log.Error("admin login: token error", slog.String("error", err.Error()))
 		transport.WriteError(w, http.StatusInternalServerError, "token error", nil)
 		return
 	}
-	refreshToken, err := manager.NewRefreshToken("admin")
-	if err != nil {
-		transport.WriteError(w, http.StatusInternalServerError, "token error", nil)
-		return
-	}
-
-	setAuthCookies(w, accessToken, refreshToken, manager.AccessTTL, manager.RefreshTTL, s.Cfg.CookieSecure)
 	log.Info("admin login: ok", slog.String("username", req.Username))
-	transport.WriteJSON(w, http.StatusOK, AdminLoginResponse{Status: "ok"})
+	transport.WriteJSON(w, http.StatusOK, AdminLoginResponse{
+		Status:       "ok",
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
 func (s *Server) AdminRefresh(w http.ResponseWriter, r *http.Request) {
@@ -109,34 +111,27 @@ func (s *Server) AdminRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manager := auth.Manager{
-		Secret:     []byte(s.Cfg.JWTSecret),
-		AccessTTL:  time.Duration(s.Cfg.AccessTTLMinutes) * time.Minute,
-		RefreshTTL: time.Duration(s.Cfg.RefreshTTLMinutes) * time.Minute,
-		Issuer:     "gbh-backend",
-	}
+	manager := s.newAdminJWTManager()
 
 	claims, err := manager.Parse(refreshCookie.Value)
-	if err != nil || claims.Role != "admin" {
+	if err != nil || claims.Role != models.UserRoleAdmin {
 		log.Warn("admin refresh: invalid refresh token")
 		transport.WriteError(w, http.StatusUnauthorized, "invalid refresh token", nil)
 		return
 	}
 
-	accessToken, err := manager.NewAccessToken("admin")
+	accessToken, refreshToken, err := s.issueAdminSession(w)
 	if err != nil {
+		log.Error("admin refresh: token error", slog.String("error", err.Error()))
 		transport.WriteError(w, http.StatusInternalServerError, "token error", nil)
 		return
 	}
-	refreshToken, err := manager.NewRefreshToken("admin")
-	if err != nil {
-		transport.WriteError(w, http.StatusInternalServerError, "token error", nil)
-		return
-	}
-
-	setAuthCookies(w, accessToken, refreshToken, manager.AccessTTL, manager.RefreshTTL, s.Cfg.CookieSecure)
 	log.Info("admin refresh: ok")
-	transport.WriteJSON(w, http.StatusOK, AdminLoginResponse{Status: "ok"})
+	transport.WriteJSON(w, http.StatusOK, AdminLoginResponse{
+		Status:       "ok",
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
 func (s *Server) AdminLogout(w http.ResponseWriter, r *http.Request) {
@@ -144,6 +139,31 @@ func (s *Server) AdminLogout(w http.ResponseWriter, r *http.Request) {
 	clearAuthCookies(w, s.Cfg.CookieSecure)
 	log.Info("admin logout: ok")
 	transport.WriteJSON(w, http.StatusOK, AdminLoginResponse{Status: "ok"})
+}
+
+func (s *Server) newAdminJWTManager() auth.Manager {
+	return auth.Manager{
+		Secret:     []byte(s.Cfg.JWTSecret),
+		AccessTTL:  time.Duration(s.Cfg.AccessTTLMinutes) * time.Minute,
+		RefreshTTL: time.Duration(s.Cfg.RefreshTTLMinutes) * time.Minute,
+		Issuer:     "gbh-backend",
+	}
+}
+
+func (s *Server) issueAdminSession(w http.ResponseWriter) (string, string, error) {
+	manager := s.newAdminJWTManager()
+
+	accessToken, err := manager.NewAccessToken(models.UserRoleAdmin)
+	if err != nil {
+		return "", "", err
+	}
+	refreshToken, err := manager.NewRefreshToken(models.UserRoleAdmin)
+	if err != nil {
+		return "", "", err
+	}
+
+	setAuthCookies(w, accessToken, refreshToken, manager.AccessTTL, manager.RefreshTTL, s.Cfg.CookieSecure)
+	return accessToken, refreshToken, nil
 }
 
 func setAuthCookies(w http.ResponseWriter, access, refresh string, accessTTL, refreshTTL time.Duration, secure bool) {

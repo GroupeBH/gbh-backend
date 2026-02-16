@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"gbh-backend/internal/auth"
@@ -41,6 +42,7 @@ func (s *Server) AdminRegister(w http.ResponseWriter, r *http.Request) {
 		transport.WriteError(w, http.StatusBadRequest, "invalid json", nil)
 		return
 	}
+	req.Username, req.Email = normalizeAdminUserIdentity(req.Username, req.Email)
 	if err := s.Val.Struct(req); err != nil {
 		log.Warn("admin register: validation error")
 		details := validationDetails(s.Val.ValidationErrors(err))
@@ -55,6 +57,11 @@ func (s *Server) AdminRegister(w http.ResponseWriter, r *http.Request) {
 	if s.Cfg.AdminSetupKey == "" {
 		log.Warn("admin register: setup key missing")
 		transport.WriteError(w, http.StatusServiceUnavailable, "admin registration not configured", nil)
+		return
+	}
+	if s.Cfg.JWTSecret == "" {
+		log.Warn("admin register: jwt secret missing")
+		transport.WriteError(w, http.StatusServiceUnavailable, "admin auth not configured", nil)
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(req.SetupKey), []byte(s.Cfg.AdminSetupKey)) != 1 {
@@ -96,7 +103,17 @@ func (s *Server) AdminRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info("admin register: ok", slog.String("user_id", user.ID), slog.String("username", user.Username))
-	transport.WriteJSON(w, http.StatusCreated, user)
+	accessToken, refreshToken, err := s.issueAdminSession(w)
+	if err != nil {
+		log.Error("admin register: token error", slog.String("error", err.Error()))
+		transport.WriteError(w, http.StatusInternalServerError, "token error", nil)
+		return
+	}
+	transport.WriteJSON(w, http.StatusCreated, AdminLoginResponse{
+		Status:       "ok",
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
 func (s *Server) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +124,7 @@ func (s *Server) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		transport.WriteError(w, http.StatusBadRequest, "invalid json", nil)
 		return
 	}
+	req.Username, req.Email = normalizeAdminUserIdentity(req.Username, req.Email)
 	if err := s.Val.Struct(req); err != nil {
 		log.Warn("admin users create: validation error")
 		details := validationDetails(s.Val.ValidationErrors(err))
@@ -212,4 +230,14 @@ func (s *Server) AdminUpdateUserPassword(w http.ResponseWriter, r *http.Request)
 
 	log.Info("admin users password: ok", slog.String("user_id", id))
 	transport.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+func normalizeAdminUserIdentity(username, email string) (string, string) {
+	username = strings.TrimSpace(username)
+	email = strings.TrimSpace(email)
+	if strings.Contains(username, "@") {
+		username = strings.ToLower(username)
+	}
+	email = strings.ToLower(email)
+	return username, email
 }
