@@ -12,11 +12,14 @@ import (
 
 	"gbh-backend/internal/auth"
 	"gbh-backend/internal/cache"
+	"gbh-backend/internal/casestudies"
 	"gbh-backend/internal/config"
 	"gbh-backend/internal/db"
 	"gbh-backend/internal/handlers"
 	"gbh-backend/internal/middleware"
 	"gbh-backend/internal/notifications"
+	"gbh-backend/internal/references"
+	"gbh-backend/internal/rfp"
 	"gbh-backend/internal/validation"
 
 	"github.com/go-chi/chi/v5"
@@ -98,6 +101,18 @@ func main() {
 		Mailer: mailer,
 	}
 
+	rfpRepo := rfp.NewRepository(cols.RFPLeads)
+	rfpService := rfp.NewService(rfpRepo, cfg.Timezone, mailer)
+	rfpHandler := rfp.NewHandler(rfpService, server.Val, logger)
+
+	referencesRepo := references.NewRepository(cols.References)
+	referencesService := references.NewService(referencesRepo, cfg.Timezone)
+	referencesHandler := references.NewHandler(referencesService, server.Val, logger)
+
+	caseStudiesRepo := casestudies.NewRepository(cols.CaseStudies)
+	caseStudiesService := casestudies.NewService(caseStudiesRepo, cfg.Timezone)
+	caseStudiesHandler := casestudies.NewHandler(caseStudiesService, server.Val, logger)
+
 	r := chi.NewRouter()
 	r.Use(chiMiddleware.RealIP)
 	r.Use(chiMiddleware.Recoverer)
@@ -109,7 +124,7 @@ func main() {
 	appointmentsLimiter := middleware.NewRateLimiter(cfg.RateLimitAppointments, time.Duration(cfg.RateLimitWindowSec)*time.Second)
 	contactLimiter := middleware.NewRateLimiter(cfg.RateLimitContact, time.Duration(cfg.RateLimitWindowSec)*time.Second)
 
-	registerAPIRoutes := func(api chi.Router) {
+	registerCoreRoutes := func(api chi.Router) {
 		api.Get("/services", server.GetServices)
 		api.Get("/services/{id}/availability", server.GetServiceAvailability)
 		api.Get("/services/{id}/testimonials", server.GetServiceTestimonials)
@@ -151,9 +166,37 @@ func main() {
 		})
 	}
 
-	// Supporte /api/... (normal) ET /api/api/... (front mal configuré / legacy).
-	r.Route("/api", registerAPIRoutes)
-	r.Route("/api/api", registerAPIRoutes)
+	registerB2BRoutes := func(api chi.Router) {
+		api.Post("/rfp", rfpHandler.Create)
+		api.Get("/references", referencesHandler.PublicList)
+		api.Get("/case-studies", caseStudiesHandler.PublicList)
+		api.Get("/case-studies/{slug}", caseStudiesHandler.PublicGetBySlug)
+
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Get("/admin/rfp", rfpHandler.AdminList)
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Get("/admin/rfp/{id}", rfpHandler.AdminGetByID)
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Patch("/admin/rfp/{id}", rfpHandler.AdminUpdateStatus)
+
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Get("/admin/references", referencesHandler.AdminList)
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Post("/admin/references", referencesHandler.AdminCreate)
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Put("/admin/references/{id}", referencesHandler.AdminUpdate)
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Delete("/admin/references/{id}", referencesHandler.AdminDelete)
+
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Get("/admin/case-studies", caseStudiesHandler.AdminList)
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Post("/admin/case-studies", caseStudiesHandler.AdminCreate)
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Put("/admin/case-studies/{id}", caseStudiesHandler.AdminUpdate)
+		api.With(middleware.AdminAuth(cfg.AdminAPIKey, jwtManager)).Delete("/admin/case-studies/{id}", caseStudiesHandler.AdminDelete)
+	}
+
+	registerV1Routes := func(api chi.Router) {
+		registerCoreRoutes(api)
+		registerB2BRoutes(api)
+	}
+
+	// Supporte /api/... (legacy) et /api/v1/... (nouvelle version), plus alias /api/api/... .
+	r.Route("/api", registerCoreRoutes)
+	r.Route("/api/api", registerCoreRoutes)
+	r.Route("/api/v1", registerV1Routes)
+	r.Route("/api/api/v1", registerV1Routes)
 
 	srv := &http.Server{
 		Addr:    cfg.ServerAddr,

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"gbh-backend/internal/models"
+	"gbh-backend/internal/rfp"
 )
 
 const defaultBrevoEndpoint = "https://api.brevo.com/v3/smtp/email"
@@ -32,7 +33,6 @@ func NewBrevoClient(apiKey, senderEmail, senderName string, sandbox bool) *Brevo
 	if strings.TrimSpace(senderName) == "" {
 		senderName = senderEmail
 	}
-	fmt.Println("brevo api keys:", apiKey)
 	return &BrevoClient{
 		apiKey:      apiKey,
 		senderEmail: senderEmail,
@@ -53,6 +53,35 @@ func (c *BrevoClient) SendAppointmentConfirmation(ctx context.Context, appointme
 		return "", err
 	}
 	return c.sendHTML(ctx, appointment.Email, appointment.Name, subject, htmlBody)
+}
+
+func (c *BrevoClient) SendRFPLeadNotification(ctx context.Context, lead rfp.Lead) (string, error) {
+	if c == nil {
+		return "", errors.New("brevo client is nil")
+	}
+	subject := fmt.Sprintf("Nouvelle demande RFP B2B - %s", lead.Organization)
+	htmlBody, err := buildRFPLeadNotificationHTML(lead)
+	if err != nil {
+		return "", err
+	}
+	return c.sendHTML(ctx, c.senderEmail, c.senderName, subject, htmlBody)
+}
+
+func (c *BrevoClient) SendRFPLeadConfirmation(ctx context.Context, lead rfp.Lead) (string, error) {
+	if c == nil {
+		return "", errors.New("brevo client is nil")
+	}
+	subject := fmt.Sprintf("Confirmation demande RFP - %s", lead.Organization)
+	htmlBody, err := buildRFPLeadConfirmationHTML(lead)
+	if err != nil {
+		return "", err
+	}
+
+	recipientName := strings.TrimSpace(lead.ContactName)
+	if recipientName == "" {
+		recipientName = lead.Organization
+	}
+	return c.sendHTML(ctx, lead.Email, recipientName, subject, htmlBody)
 }
 
 func (c *BrevoClient) sendHTML(ctx context.Context, toEmail, toName, subject, htmlBody string) (string, error) {

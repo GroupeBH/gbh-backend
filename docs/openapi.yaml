@@ -1,7 +1,7 @@
 ﻿openapi: 3.0.3
 info:
   title: GBH Backend API
-  version: 1.4.0
+  version: 1.5.0
   description: API REST JSON pour Groupe B-Holding Sarl (GBH).
 servers:
   - url: http://localhost:8080
@@ -620,6 +620,348 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ContactMessage'
+  /api/v1/rfp:
+    post:
+      summary: Créer une demande RFP B2B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RFPCreateRequest'
+      responses:
+        "201":
+          description: RFP créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RFPCreateResponse'
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/rfp:
+    get:
+      summary: Lister les demandes RFP (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [new, reviewing, qualified, won, lost]
+        - in: query
+          name: source
+          required: false
+          schema:
+            type: string
+            enum: [website, whatsapp, manual]
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Liste RFP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RFPAdminListResponse'
+  /api/v1/admin/rfp/{id}:
+    get:
+      summary: Détail d'une demande RFP (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Détail RFP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RFP'
+        "404":
+          description: Non trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      summary: Changer le statut d'une demande RFP (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RFPStatusUpdate'
+      responses:
+        "200":
+          description: RFP mise à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RFP'
+  /api/v1/references:
+    get:
+      summary: Lister les références publiques
+      parameters:
+        - in: query
+          name: category
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Liste des références publiques
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferenceListResponse'
+  /api/v1/admin/references:
+    get:
+      summary: Lister les références (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: query
+          name: category
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Liste des références admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminReferenceListResponse'
+    post:
+      summary: Créer une référence (admin)
+      security:
+        - AdminKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferenceUpsertRequest'
+      responses:
+        "201":
+          description: Référence créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reference'
+  /api/v1/admin/references/{id}:
+    put:
+      summary: Modifier une référence (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferenceUpsertRequest'
+      responses:
+        "200":
+          description: Référence mise à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reference'
+    delete:
+      summary: Supprimer une référence (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Suppression OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+  /api/v1/case-studies:
+    get:
+      summary: Lister les études de cas publiées
+      parameters:
+        - in: query
+          name: category
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Liste publique des études de cas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseStudyListResponse'
+  /api/v1/case-studies/{slug}:
+    get:
+      summary: Détail d'une étude de cas publiée
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Détail étude de cas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseStudy'
+        "404":
+          description: Non trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/case-studies:
+    get:
+      summary: Lister les études de cas (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: query
+          name: category
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Liste admin des études de cas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCaseStudyListResponse'
+    post:
+      summary: Créer une étude de cas (admin)
+      security:
+        - AdminKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaseStudyUpsertRequest'
+      responses:
+        "201":
+          description: Étude de cas créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseStudy'
+  /api/v1/admin/case-studies/{id}:
+    put:
+      summary: Modifier une étude de cas (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaseStudyUpsertRequest'
+      responses:
+        "200":
+          description: Étude de cas mise à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseStudy'
+    delete:
+      summary: Supprimer une étude de cas (admin)
+      security:
+        - AdminKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Suppression OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
 components:
   securitySchemes:
     AdminKey:
@@ -987,6 +1329,244 @@ components:
       properties:
         password:
           type: string
+    RFPCreateRequest:
+      type: object
+      required:
+        - organization
+        - domain
+        - phone
+        - description
+      properties:
+        organization:
+          type: string
+        sector:
+          type: string
+        domain:
+          type: string
+        deadline:
+          type: string
+        budget_range:
+          type: string
+        contact_name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+          enum: [website, whatsapp, manual]
+    RFPCreateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        id:
+          type: string
+    RFPStatusUpdate:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [new, reviewing, qualified, won, lost]
+    RFP:
+      type: object
+      properties:
+        id:
+          type: string
+        organization:
+          type: string
+        sector:
+          type: string
+        domain:
+          type: string
+        deadline:
+          type: string
+        budget_range:
+          type: string
+        contact_name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [new, reviewing, qualified, won, lost]
+        source:
+          type: string
+          enum: [website, whatsapp, manual]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    RFPAdminListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RFP'
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
+    ReferenceUpsertRequest:
+      type: object
+      required:
+        - client_name
+        - category
+        - summary
+        - location
+      properties:
+        client_name:
+          type: string
+        category:
+          type: string
+        summary:
+          type: string
+        location:
+          type: string
+        logo_url:
+          type: string
+        is_public:
+          type: boolean
+        sort_order:
+          type: integer
+    Reference:
+      type: object
+      properties:
+        id:
+          type: string
+        client_name:
+          type: string
+        category:
+          type: string
+        summary:
+          type: string
+        location:
+          type: string
+        logo_url:
+          type: string
+        is_public:
+          type: boolean
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ReferenceListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reference'
+    AdminReferenceListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reference'
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
+    CaseStudyUpsertRequest:
+      type: object
+      required:
+        - title
+        - category
+        - client_name
+        - problem
+        - solution
+        - result
+      properties:
+        slug:
+          type: string
+        title:
+          type: string
+        category:
+          type: string
+        client_name:
+          type: string
+        problem:
+          type: string
+        solution:
+          type: string
+        result:
+          type: string
+        is_published:
+          type: boolean
+        sort_order:
+          type: integer
+    CaseStudy:
+      type: object
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        title:
+          type: string
+        category:
+          type: string
+        client_name:
+          type: string
+        problem:
+          type: string
+        solution:
+          type: string
+        result:
+          type: string
+        is_published:
+          type: boolean
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CaseStudyListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseStudy'
+    AdminCaseStudyListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseStudy'
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
     Error:
       type: object
       properties:

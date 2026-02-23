@@ -16,6 +16,9 @@ type Collections struct {
 	ContactMessages     *mongo.Collection
 	ReservationBlocks   *mongo.Collection
 	Users               *mongo.Collection
+	RFPLeads            *mongo.Collection
+	References          *mongo.Collection
+	CaseStudies         *mongo.Collection
 }
 
 func Connect(ctx context.Context, uri, dbName string) (*mongo.Client, *Collections, error) {
@@ -37,6 +40,9 @@ func Connect(ctx context.Context, uri, dbName string) (*mongo.Client, *Collectio
 		ContactMessages:     db.Collection("contact_messages"),
 		ReservationBlocks:   db.Collection("reservation_blocks"),
 		Users:               db.Collection("users"),
+		RFPLeads:            db.Collection("rfp_leads"),
+		References:          db.Collection("references"),
+		CaseStudies:         db.Collection("case_studies"),
 	}
 
 	return client, cols, nil
@@ -95,6 +101,40 @@ func EnsureIndexes(ctx context.Context, cols *Collections) error {
 		{
 			Keys:    bson.D{{Key: "email", Value: 1}},
 			Options: options.Index().SetUnique(true).SetSparse(true),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = cols.RFPLeads.Indexes().CreateMany(indexTimeout, []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "status", Value: 1}, {Key: "created_at", Value: -1}},
+		},
+		{
+			Keys: bson.D{{Key: "source", Value: 1}, {Key: "created_at", Value: -1}},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = cols.References.Indexes().CreateMany(indexTimeout, []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "is_public", Value: 1}, {Key: "category", Value: 1}, {Key: "sort_order", Value: 1}, {Key: "created_at", Value: -1}},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = cols.CaseStudies.Indexes().CreateMany(indexTimeout, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "slug", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys: bson.D{{Key: "is_published", Value: 1}, {Key: "category", Value: 1}, {Key: "sort_order", Value: 1}, {Key: "created_at", Value: -1}},
 		},
 	})
 	if err != nil {
