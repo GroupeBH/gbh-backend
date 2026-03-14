@@ -1049,6 +1049,9 @@ components:
           type: string
         phone:
           type: string
+        deviceToken:
+          type: string
+          description: "Token FCM du périphérique pour recevoir les notifications push (optionnel)."
         type:
           type: string
           enum: [online, presentiel]

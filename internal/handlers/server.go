@@ -15,6 +15,11 @@ import (
 
 type AppointmentMailer interface {
 	SendAppointmentConfirmation(ctx context.Context, appointment models.Appointment, service models.Service) (string, error)
+	SendEmail(ctx context.Context, toEmail, toName, subject, htmlBody string) (string, error)
+}
+
+type AppointmentPusher interface {
+	SendAppointmentConfirmation(ctx context.Context, deviceToken string, appointment models.Appointment, service models.Service) (string, error)
 }
 
 type Server struct {
@@ -24,6 +29,7 @@ type Server struct {
 	Log    *slog.Logger
 	Cache  cache.Cache
 	Mailer AppointmentMailer
+	Push   AppointmentPusher
 }
 
 func (s *Server) logWithRequest(r *http.Request) *slog.Logger {

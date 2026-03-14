@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"gbh-backend/internal/models"
 	"gbh-backend/internal/schedule"
 	"gbh-backend/internal/transport"
+
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -21,6 +23,7 @@ type CreateAppointmentRequest struct {
 	Name          string `json:"name" validate:"required"`
 	Email         string `json:"email" validate:"required,email"`
 	Phone         string `json:"phone" validate:"required,phone"`
+	DeviceToken   string `json:"deviceToken,omitempty" validate:"omitempty"`
 	Type          string `json:"type" validate:"required,oneof=online presentiel"`
 	Date          string `json:"date" validate:"required,date"`
 	Time          string `json:"time" validate:"required,clock"`
@@ -169,6 +172,20 @@ func (s *Server) CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		go s.sendAppointmentConfirmationEmail(log, appointmentCopy, serviceCopy)
 	}
 
+	if s.Push != nil && strings.TrimSpace(req.DeviceToken) != "" {
+		appointmentCopy := appointment
+		serviceCopy := service
+		deviceToken := req.DeviceToken
+		go s.sendAppointmentConfirmationPush(log, appointmentCopy, serviceCopy, deviceToken)
+	}
+
+	// Notify all admins about the new appointment.
+	go func(appointment models.Appointment, service models.Service) {
+		subject := "Nouveau rendez-vous réservé"
+		htmlBody := fmt.Sprintf("<p>Un nouveau rendez-vous a été réservé par <strong>%s</strong> pour le service <strong>%s</strong> le <strong>%s</strong> à <strong>%s</strong>.</p><p>Référence : %s</p>", appointment.Name, service.Name, appointment.Date, appointment.Time, appointment.ID)
+		s.NotifyAdmins(context.Background(), subject, htmlBody)
+	}(appointment, service)
+
 	log.Info("appointments create: booked",
 		slog.String("appointment_id", appointment.ID),
 		slog.String("service_id", appointment.ServiceID),
@@ -205,6 +222,30 @@ func (s *Server) sendAppointmentConfirmationEmail(log *slog.Logger, appointment 
 	log.Info("appointments email: sent",
 		slog.String("appointment_id", appointment.ID),
 		slog.String("email", appointment.Email),
+		slog.String("message_id", messageID),
+	)
+}
+
+func (s *Server) sendAppointmentConfirmationPush(log *slog.Logger, appointment models.Appointment, service models.Service, deviceToken string) {
+	if s.Push == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	messageID, err := s.Push.SendAppointmentConfirmation(ctx, deviceToken, appointment, service)
+	if err != nil {
+		log.Warn("appointments push: send failed",
+			slog.String("appointment_id", appointment.ID),
+			slog.String("device_token", deviceToken),
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	log.Info("appointments push: sent",
+		slog.String("appointment_id", appointment.ID),
+		slog.String("device_token", deviceToken),
 		slog.String("message_id", messageID),
 	)
 }

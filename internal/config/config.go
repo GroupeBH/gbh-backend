@@ -36,6 +36,13 @@ type Config struct {
 	BrevoSenderEmail      string
 	BrevoSenderName       string
 	BrevoSandbox          bool
+
+	// Firebase (FCM) service account JSON path.
+	// If empty, the app will use GOOGLE_APPLICATION_CREDENTIALS if set.
+	FirebaseCredentialsFile string
+	// Firebase (FCM) service account JSON content encoded in base64.
+	// If set, takes precedence over FirebaseCredentialsFile.
+	FirebaseCredentialsBase64 string
 }
 
 func getEnv(key, fallback string) string {
@@ -76,32 +83,34 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		Env:                   getEnv("APP_ENV", "development"),
-		MongoURI:              mongoURI,
-		MongoDB:               mongoDB,
-		ServerAddr:            getEnv("SERVER_ADDR", ":8080"),
-		FrontendOrigins:       frontendOrigins,
-		RateLimitAppointments: getEnvInt("RATE_LIMIT_APPOINTMENTS", 10),
-		RateLimitContact:      getEnvInt("RATE_LIMIT_CONTACT", 5),
-		RateLimitWindowSec:    getEnvInt("RATE_LIMIT_WINDOW_SEC", 60),
-		RedisURL:              getEnv("REDIS_URL", ""),
-		RedisAddr:             getEnv("REDIS_ADDR", ""),
-		RedisPassword:         getEnv("REDIS_PASSWORD", ""),
-		RedisDB:               getEnvInt("REDIS_DB", 0),
-		CacheTTLSeconds:       getEnvInt("CACHE_TTL_SECONDS", 60),
-		AdminAPIKey:           getEnv("ADMIN_API_KEY", ""),
-		AdminSetupKey:         getEnv("ADMIN_SETUP_KEY", ""),
-		AdminUser:             getEnv("ADMIN_USER", "admin"),
-		AdminPassword:         getEnv("ADMIN_PASSWORD", ""),
-		JWTSecret:             getEnv("JWT_SECRET", ""),
-		AccessTTLMinutes:      getEnvInt("ACCESS_TTL_MINUTES", 15),
-		RefreshTTLMinutes:     getEnvInt("REFRESH_TTL_MINUTES", 43200),
-		CookieSecure:          getEnv("COOKIE_SECURE", "false") == "true",
-		Timezone:              loc,
-		BrevoAPIKey:           getEnv("BREVO_API_KEY", ""),
-		BrevoSenderEmail:      getEnv("BREVO_SENDER_EMAIL", ""),
-		BrevoSenderName:       getEnv("BREVO_SENDER_NAME", ""),
-		BrevoSandbox:          getEnv("BREVO_SANDBOX", "false") == "true",
+		Env:                       getEnv("APP_ENV", "development"),
+		MongoURI:                  mongoURI,
+		MongoDB:                   mongoDB,
+		ServerAddr:                getEnv("SERVER_ADDR", ":8080"),
+		FrontendOrigins:           frontendOrigins,
+		RateLimitAppointments:     getEnvInt("RATE_LIMIT_APPOINTMENTS", 10),
+		RateLimitContact:          getEnvInt("RATE_LIMIT_CONTACT", 5),
+		RateLimitWindowSec:        getEnvInt("RATE_LIMIT_WINDOW_SEC", 60),
+		RedisURL:                  getEnv("REDIS_URL", ""),
+		RedisAddr:                 getEnv("REDIS_ADDR", ""),
+		RedisPassword:             getEnv("REDIS_PASSWORD", ""),
+		RedisDB:                   getEnvInt("REDIS_DB", 0),
+		CacheTTLSeconds:           getEnvInt("CACHE_TTL_SECONDS", 60),
+		AdminAPIKey:               getEnv("ADMIN_API_KEY", ""),
+		AdminSetupKey:             getEnv("ADMIN_SETUP_KEY", ""),
+		AdminUser:                 getEnv("ADMIN_USER", "admin"),
+		AdminPassword:             getEnv("ADMIN_PASSWORD", ""),
+		JWTSecret:                 getEnv("JWT_SECRET", ""),
+		AccessTTLMinutes:          getEnvInt("ACCESS_TTL_MINUTES", 15),
+		RefreshTTLMinutes:         getEnvInt("REFRESH_TTL_MINUTES", 43200),
+		CookieSecure:              getEnv("COOKIE_SECURE", "false") == "true",
+		Timezone:                  loc,
+		BrevoAPIKey:               getEnv("BREVO_API_KEY", ""),
+		BrevoSenderEmail:          getEnv("BREVO_SENDER_EMAIL", ""),
+		BrevoSenderName:           getEnv("BREVO_SENDER_NAME", ""),
+		BrevoSandbox:              getEnv("BREVO_SANDBOX", "false") == "true",
+		FirebaseCredentialsFile:   getEnv("FIREBASE_CREDENTIALS_FILE", getEnv("GOOGLE_APPLICATION_CREDENTIALS", "")),
+		FirebaseCredentialsBase64: getEnv("FIREBASE_CREDENTIALS_BASE64", ""),
 	}
 
 	return cfg, nil

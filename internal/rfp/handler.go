@@ -3,6 +3,7 @@ package rfp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -12,20 +13,23 @@ import (
 	"gbh-backend/internal/middleware"
 	"gbh-backend/internal/transport"
 	"gbh-backend/internal/validation"
+
 	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
-	service *Service
-	val     *validation.Validator
-	log     *slog.Logger
+	service      *Service
+	val          *validation.Validator
+	log          *slog.Logger
+	notifyAdmins func(ctx context.Context, subject, htmlBody string)
 }
 
-func NewHandler(service *Service, val *validation.Validator, log *slog.Logger) *Handler {
+func NewHandler(service *Service, val *validation.Validator, log *slog.Logger, notifyAdmins func(ctx context.Context, subject, htmlBody string)) *Handler {
 	return &Handler{
-		service: service,
-		val:     val,
-		log:     log,
+		service:      service,
+		val:          val,
+		log:          log,
+		notifyAdmins: notifyAdmins,
 	}
 }
 
@@ -62,6 +66,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	go func(created Lead) {
 		notifyCtx, notifyCancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer notifyCancel()
+
+		if h.notifyAdmins != nil {
+			subject := "Nouvelle demande RFP"
+			htmlBody := fmt.Sprintf("<p>Nouvelle demande RFP de <strong>%s</strong> (%s).</p><p>Organisation : %s</p><p>Besoin : %s</p>", created.ContactName, created.Email, created.Organization, created.Description)
+			h.notifyAdmins(notifyCtx, subject, htmlBody)
+		}
+
 		if err := h.service.NotifyNewLead(notifyCtx, created); err != nil {
 			h.log.Warn("rfp create: notification failed",
 				slog.String("rfp_id", created.ID),

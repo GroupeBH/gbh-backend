@@ -26,6 +26,10 @@ type BrevoClient struct {
 	httpClient  *http.Client
 }
 
+func (c *BrevoClient) SendEmail(ctx context.Context, toEmail, toName, subject, htmlBody string) (string, error) {
+	return c.sendHTML(ctx, toEmail, toName, subject, htmlBody)
+}
+
 func NewBrevoClient(apiKey, senderEmail, senderName string, sandbox bool) *BrevoClient {
 	if strings.TrimSpace(apiKey) == "" || strings.TrimSpace(senderEmail) == "" {
 		return nil

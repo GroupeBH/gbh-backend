@@ -1,0 +1,45 @@
+# Docker Compose for production (uses MongoDB Atlas and Redis Upstash)
+services:
+  api:
+    build:
+      context: .
+      target: prod
+    container_name: gbh-api-prod
+    restart: unless-stopped
+    environment:
+      - APP_ENV=production
+      - SERVER_ADDR=:8080
+      # Configure these with your production values
+      - MONGO_URI=${MONGO_URI}
+      - MONGO_DB=${MONGO_DB}
+      - FRONTEND_ORIGINS=${FRONTEND_ORIGINS}
+      - RATE_LIMIT_APPOINTMENTS=${RATE_LIMIT_APPOINTMENTS:-10}
+      - RATE_LIMIT_CONTACT=${RATE_LIMIT_CONTACT:-5}
+      - RATE_LIMIT_WINDOW_SEC=${RATE_LIMIT_WINDOW_SEC:-60}
+      - TZ=Africa/Kinshasa
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
+      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-60}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - ADMIN_SETUP_KEY=${ADMIN_SETUP_KEY}
+      - ADMIN_USER=${ADMIN_USER}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - ACCESS_TTL_MINUTES=${ACCESS_TTL_MINUTES:-15}
+      - REFRESH_TTL_MINUTES=${REFRESH_TTL_MINUTES:-43200}
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - BREVO_SENDER_EMAIL=${BREVO_SENDER_EMAIL}
+      - BREVO_SENDER_NAME=${BREVO_SENDER_NAME}
+      - BREVO_SANDBOX=${BREVO_SANDBOX:-false}
+      - FIREBASE_CREDENTIALS_BASE64=${FIREBASE_CREDENTIALS_BASE64}
+    ports:
+      - "${PORT:-8080}:8080"
+    networks:
+      - gbh-network
+
+networks:
+  gbh-network:
+    driver: bridge

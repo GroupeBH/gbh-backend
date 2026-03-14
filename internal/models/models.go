@@ -39,21 +39,22 @@ type User struct {
 }
 
 type Appointment struct {
-	ID            string    `bson:"_id,omitempty" json:"id"`
-	ServiceID     string    `bson:"serviceId" json:"serviceId"`
-	Name          string    `bson:"name" json:"name"`
-	Email         string    `bson:"email" json:"email"`
-	Phone         string    `bson:"phone" json:"phone"`
-	Type          string    `bson:"type" json:"type"`
-	Date          string    `bson:"date" json:"date"`
-	Time          string    `bson:"time" json:"time"`
-	Duration      int       `bson:"duration" json:"duration"`
-	Price         int       `bson:"price" json:"price"`
-	Tax           int       `bson:"tax" json:"tax"`
-	Total         int       `bson:"total" json:"total"`
-	Status        string    `bson:"status" json:"status"`
-	PaymentMethod string    `bson:"paymentMethod" json:"paymentMethod"`
-	CreatedAt     time.Time `bson:"createdAt" json:"createdAt"`
+	ID             string     `bson:"_id,omitempty" json:"id"`
+	ServiceID      string     `bson:"serviceId" json:"serviceId"`
+	Name           string     `bson:"name" json:"name"`
+	Email          string     `bson:"email" json:"email"`
+	Phone          string     `bson:"phone" json:"phone"`
+	Type           string     `bson:"type" json:"type"`
+	Date           string     `bson:"date" json:"date"`
+	Time           string     `bson:"time" json:"time"`
+	Duration       int        `bson:"duration" json:"duration"`
+	Price          int        `bson:"price" json:"price"`
+	Tax            int        `bson:"tax" json:"tax"`
+	Total          int        `bson:"total" json:"total"`
+	Status         string     `bson:"status" json:"status"`
+	PaymentMethod  string     `bson:"paymentMethod" json:"paymentMethod"`
+	CreatedAt      time.Time  `bson:"createdAt" json:"createdAt"`
+	ReminderSentAt *time.Time `bson:"reminderSentAt,omitempty" json:"reminderSentAt,omitempty"`
 }
 
 type ContactMessage struct {

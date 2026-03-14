@@ -29,24 +29,37 @@ Backend REST JSON pour l’application web **Groupe B-Holding Sarl (GBH)**.
 cp .env.example .env
 ```
 
-2. Lancer MongoDB (optionnel via Docker)
+2. **Développement** : Lancer avec Docker Compose (MongoDB + Redis locaux)
 ```
-docker-compose up -d mongo
+# Avec DB locale
+docker-compose --profile localdb up --build
+
+# Sans DB locale (utilise host.docker.internal ou external)
+docker-compose up --build
 ```
 
-3. Optionnel: lancer Redis (cache)
+3. **Production** : Utiliser Docker Compose prod (MongoDB Atlas + Redis Upstash)
 ```
-docker-compose up -d redis
+# Configurer les variables d'environnement pour prod
+export MONGO_URI="mongodb+srv://..."
+export REDIS_URL="rediss://..."
+# etc.
+
+docker-compose -f docker-compose.prod.yml up --build
 ```
 
-4. Installer les dépendances et lancer l’API
+4. Optionnel: lancer MongoDB/Redis séparément (dev)
+```
+docker-compose up -d mongo redis
+```
+
+5. Installer les dépendances et lancer l’API (sans Docker)
 ```
 go mod tidy
-
 go run ./cmd/api
 ```
 
-5. Seed des services
+6. Seed des services
 ```
 go run ./cmd/seed
 ```
@@ -86,11 +99,43 @@ go run ./cmd/seed
 ## OpenAPI
 - Fichier: `docs/openapi.yaml`
 
-## Tests
-Tests unitaires critiques (disponibilité, créneaux, date passée, conflit).
+## Docker
+
+### Développement
+Utilise `docker-compose.yml` avec MongoDB et Redis locaux :
 ```
-go test ./...
+# Avec DB locale
+docker-compose --profile localdb up --build
+
+# Sans DB locale (utilise host.docker.internal ou external)
+docker-compose up --build
 ```
+- Hot reload avec Air
+- Base de données locale persistée (profil `localdb`)
+- Cache Redis local avec persistence
+- Healthchecks pour services
+- Variables d'env depuis `.env` + overrides
+
+**Note** : Sans profil `localdb`, définis `MONGO_URI_DOCKER` dans `.env` pour pointer vers une DB externe :
+```
+MONGO_URI_DOCKER=mongodb://host.docker.internal:27017/gbh
+```
+
+### Production
+Utilise `docker-compose.prod.yml` sans services locaux (pointe vers Atlas/Upstash) :
+```
+docker-compose -f docker-compose.prod.yml up --build
+```
+- Image optimisée (multi-stage build)
+- Variables d'environnement externes requises
+- Pas de volumes locaux pour DB/cache
+
+### Variables pour Production
+Dans `docker-compose.prod.yml`, configure :
+- `MONGO_URI` : URI MongoDB Atlas
+- `REDIS_URL` : URL Redis Upstash
+- `FIREBASE_CREDENTIALS_BASE64` : Credentials Firebase encodés
+- Autres variables sensibles...
 
 ## Variables d’environnement
 - `APP_ENV`
@@ -119,6 +164,12 @@ go test ./...
 - `ACCESS_TTL_MINUTES`
 - `REFRESH_TTL_MINUTES`
 - `COOKIE_SECURE`
+- `BREVO_API_KEY`
+- `BREVO_SENDER_EMAIL`
+- `BREVO_SENDER_NAME`
+- `BREVO_SANDBOX`
+- `FIREBASE_CREDENTIALS_FILE` (ou `GOOGLE_APPLICATION_CREDENTIALS`)
+- `FIREBASE_CREDENTIALS_BASE64` (contenu JSON encodé en base64, prend priorité sur le fichier)
 
 ## Notes d’implémentation
 - Les dates sont stockées en `YYYY-MM-DD` et les heures en `HH:MM`.

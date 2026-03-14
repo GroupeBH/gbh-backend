@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"log"
 	"log/slog"
 	"net/http"
@@ -92,6 +93,33 @@ func main() {
 		logger.Info("brevo mailer enabled", slog.String("sender", cfg.BrevoSenderEmail), slog.Bool("sandbox", cfg.BrevoSandbox))
 	}
 
+	var push handlers.AppointmentPusher
+	if cfg.FirebaseCredentialsBase64 != "" {
+		// Decode base64 credentials
+		credentialsJSON, err := base64.StdEncoding.DecodeString(cfg.FirebaseCredentialsBase64)
+		if err != nil {
+			logger.Error("fcm base64 decode failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		fcm, err := notifications.NewFCMClientFromJSON(ctx, credentialsJSON)
+		if err != nil {
+			logger.Error("fcm init from base64 failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		push = fcm
+		logger.Info("fcm push enabled (base64)")
+	} else if cfg.FirebaseCredentialsFile != "" || os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" {
+		fcm, err := notifications.NewFCMClient(ctx, cfg.FirebaseCredentialsFile)
+		if err != nil {
+			logger.Error("fcm init failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		push = fcm
+		logger.Info("fcm push enabled (file)")
+	} else {
+		logger.Info("fcm push disabled")
+	}
+
 	server := &handlers.Server{
 		Cfg:    cfg,
 		Cols:   cols,
@@ -99,11 +127,12 @@ func main() {
 		Log:    logger,
 		Cache:  cacheStore,
 		Mailer: mailer,
+		Push:   push,
 	}
 
 	rfpRepo := rfp.NewRepository(cols.RFPLeads)
 	rfpService := rfp.NewService(rfpRepo, cfg.Timezone, mailer)
-	rfpHandler := rfp.NewHandler(rfpService, server.Val, logger)
+	rfpHandler := rfp.NewHandler(rfpService, server.Val, logger, server.NotifyAdmins)
 
 	referencesRepo := references.NewRepository(cols.References)
 	referencesService := references.NewService(referencesRepo, cfg.Timezone)
@@ -207,6 +236,20 @@ func main() {
 		logger.Info("server started", slog.String("addr", cfg.ServerAddr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("server error", slog.String("error", err.Error()))
+		}
+	}()
+
+	// Appointment reminder cron (notifies admins of upcoming appointments)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				server.SendUpcomingAppointmentReminders(context.Background(), 30*time.Minute)
+			}
 		}
 	}()
 
