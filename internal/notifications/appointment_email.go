@@ -24,6 +24,9 @@ const appointmentConfirmationTemplate = `<!DOCTYPE html>
     <li>Prix : {{.Price}}</li>
     <li>Total : {{.Total}}</li>
   </ul>
+  {{if .ShowOfficeAddress}}
+  <p><strong>Adresse de nos bureaux :</strong> Boulevard Sendwe, immeuble Adi Construct, quatrieme niveau, commune de Kalamu, quartier Matonge.</p>
+  {{end}}
   <p>Recherche de rendez-vous : utilisez cet ID dans l'option de recherche par ID.</p>
   <p>A apporter le jour du rendez-vous :</p>
   <ul>
@@ -37,30 +40,32 @@ const appointmentConfirmationTemplate = `<!DOCTYPE html>
 var appointmentConfirmationTmpl = template.Must(template.New("appointment_confirmation").Parse(appointmentConfirmationTemplate))
 
 type appointmentConfirmationData struct {
-	Name            string
-	ServiceName     string
-	Date            string
-	Time            string
-	DurationMinutes int
-	TypeLabel       string
-	PaymentLabel    string
-	Price           int
-	Total           int
-	AppointmentID   string
+	Name              string
+	ServiceName       string
+	Date              string
+	Time              string
+	DurationMinutes   int
+	TypeLabel         string
+	PaymentLabel      string
+	Price             int
+	Total             int
+	AppointmentID     string
+	ShowOfficeAddress bool
 }
 
 func buildAppointmentConfirmationHTML(appointment models.Appointment, service models.Service) (string, error) {
 	data := appointmentConfirmationData{
-		Name:            appointment.Name,
-		ServiceName:     service.Name,
-		Date:            appointment.Date,
-		Time:            appointment.Time,
-		DurationMinutes: appointment.Duration,
-		TypeLabel:       appointmentTypeLabel(appointment.Type),
-		PaymentLabel:    paymentMethodLabel(appointment.PaymentMethod),
-		Price:           appointment.Price,
-		Total:           appointment.Total,
-		AppointmentID:   appointment.ID,
+		Name:              appointment.Name,
+		ServiceName:       service.Name,
+		Date:              appointment.Date,
+		Time:              appointment.Time,
+		DurationMinutes:   appointment.Duration,
+		TypeLabel:         appointmentTypeLabel(appointment.Type),
+		PaymentLabel:      paymentMethodLabel(appointment.PaymentMethod),
+		Price:             appointment.Price,
+		Total:             appointment.Total,
+		AppointmentID:     appointment.ID,
+		ShowOfficeAddress: appointment.Type == models.ConsultationPresentiel,
 	}
 	var buf bytes.Buffer
 	if err := appointmentConfirmationTmpl.Execute(&buf, data); err != nil {
