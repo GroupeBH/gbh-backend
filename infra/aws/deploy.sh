@@ -23,6 +23,35 @@ set_tf_var_from_env() {
   fi
 }
 
+tfvars_string_value() {
+  local tf_name="$1"
+  local file="${TERRAFORM_DIR}/terraform.tfvars"
+
+  if [[ -f "$file" ]]; then
+    sed -n "s/^[[:space:]]*${tf_name}[[:space:]]*=[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$file" | tail -n 1
+  fi
+}
+
+effective_tf_string_value() {
+  local tf_name="$1"
+  local default_value="$2"
+  local env_var_name="TF_VAR_${tf_name}"
+  local tfvars_value
+
+  tfvars_value="$(tfvars_string_value "$tf_name")"
+  if [[ -n "$tfvars_value" ]]; then
+    echo "$tfvars_value"
+    return
+  fi
+
+  if [[ -n "${!env_var_name:-}" ]]; then
+    echo "${!env_var_name}"
+    return
+  fi
+
+  echo "$default_value"
+}
+
 require_cmd terraform
 require_cmd ansible-playbook
 require_cmd aws
@@ -94,6 +123,14 @@ if [[ -f "${TERRAFORM_DIR}/backend.hcl" ]]; then
   terraform -chdir="$TERRAFORM_DIR" init "${TERRAFORM_INIT_ARGS[@]}" -backend-config=backend.hcl
 else
   terraform -chdir="$TERRAFORM_DIR" init "${TERRAFORM_INIT_ARGS[@]}" -backend=false
+fi
+
+STATIC_IP_NAME_EFFECTIVE="$(effective_tf_string_value static_ip_name gbh-backend-prod-ip)"
+if ! terraform -chdir="$TERRAFORM_DIR" state show aws_lightsail_static_ip.api >/dev/null 2>&1; then
+  if aws lightsail get-static-ip --static-ip-name "$STATIC_IP_NAME_EFFECTIVE" >/dev/null 2>&1; then
+    echo "Importing existing Lightsail static IP ${STATIC_IP_NAME_EFFECTIVE} into Terraform state..."
+    terraform -chdir="$TERRAFORM_DIR" import aws_lightsail_static_ip.api "$STATIC_IP_NAME_EFFECTIVE"
+  fi
 fi
 
 echo "Applying Terraform..."
