@@ -1,0 +1,11 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform/backend.hcl
+terraform/*.auto.tfvars
+terraform/*.auto.tfvars.json
+terraform/terraform.tfvars
+ansible/inventory.ini
+.env
+.env.*

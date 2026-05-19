@@ -1,0 +1,27 @@
+{% if caddy_email | length > 0 %}
+{
+	email {{ caddy_email }}
+}
+
+{% endif %}
+{% if domain_name | length > 0 %}
+{{ domain_name }} {
+{% else %}
+:80 {
+{% endif %}
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+
+	reverse_proxy app:8080
+}
+

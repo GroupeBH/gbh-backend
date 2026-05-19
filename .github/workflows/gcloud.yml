@@ -1,0 +1,166 @@
+name: Deploy GBH Backend to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - ".github/workflows/gcloud.yml"
+      - "Dockerfile"
+      - "go.mod"
+      - "go.sum"
+      - "cmd/**"
+      - "internal/**"
+      - "infra/gcloud/**"
+  workflow_dispatch:
+    inputs:
+      app_image_tag:
+        description: "Docker image tag to deploy. Empty uses repository variable APP_IMAGE_TAG, then latest."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gbh-backend-cloud-run-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Terraform deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+      GAR_LOCATION: ${{ vars.GAR_LOCATION || vars.GCP_REGION || 'europe-west1' }}
+      GAR_REPOSITORY: ${{ vars.GAR_REPOSITORY || 'gbh-backend' }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'gbh-backend' }}
+      CREATE_ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.CREATE_ARTIFACT_REGISTRY_REPOSITORY || 'true' }}
+      APP_IMAGE_TAG_OVERRIDE: ${{ vars.APP_IMAGE_TAG || 'latest' }}
+      APP_IMAGE_TAG_INPUT: ${{ github.event.inputs.app_image_tag }}
+      GCP_TF_STATE_BUCKET: ${{ vars.GCP_TF_STATE_BUCKET }}
+      GCP_TF_STATE_PREFIX: ${{ vars.GCP_TF_STATE_PREFIX || 'gbh-backend/gcloud' }}
+      TERRAFORM_INIT_RECONFIGURE: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Install Ansible
+        run: |
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user "ansible-core>=2.16,<2.19"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Resolve image tag
+        run: |
+          set -euo pipefail
+
+          : "${GCP_PROJECT_ID:?Set repository variable GCP_PROJECT_ID.}"
+
+          if [[ -n "$APP_IMAGE_TAG_INPUT" ]]; then
+            resolved_tag="$APP_IMAGE_TAG_INPUT"
+          elif [[ -n "$APP_IMAGE_TAG_OVERRIDE" ]]; then
+            resolved_tag="$APP_IMAGE_TAG_OVERRIDE"
+          else
+            resolved_tag="latest"
+          fi
+
+          image_uri="${GAR_LOCATION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GAR_REPOSITORY}/${CLOUD_RUN_SERVICE}:${resolved_tag}"
+
+          echo "APP_IMAGE_TAG=$resolved_tag" >> "$GITHUB_ENV"
+          echo "APP_IMAGE=$image_uri" >> "$GITHUB_ENV"
+
+      - name: Prepare Terraform backend and variables
+        env:
+          CLOUD_RUN_ENV_VARS_JSON: ${{ secrets.CLOUD_RUN_ENV_VARS_JSON }}
+          CLOUD_RUN_SECRET_ENV_VARS_JSON: ${{ secrets.CLOUD_RUN_SECRET_ENV_VARS_JSON }}
+        run: |
+          set -euo pipefail
+
+          : "${GCP_TF_STATE_BUCKET:?Set repository variable GCP_TF_STATE_BUCKET for remote Terraform state.}"
+
+          case "$CREATE_ARTIFACT_REGISTRY_REPOSITORY" in
+            true|false) ;;
+            *) echo "CREATE_ARTIFACT_REGISTRY_REPOSITORY must be true or false." >&2; exit 1 ;;
+          esac
+
+          {
+            printf 'bucket = "%s"\n' "$GCP_TF_STATE_BUCKET"
+            printf 'prefix = "%s"\n' "$GCP_TF_STATE_PREFIX"
+          } > infra/gcloud/terraform/backend.hcl
+          chmod 600 infra/gcloud/terraform/backend.hcl
+
+          jq -n \
+            --arg project_id "$GCP_PROJECT_ID" \
+            --arg region "$GCP_REGION" \
+            --arg service_name "$CLOUD_RUN_SERVICE" \
+            --arg app_image "$APP_IMAGE" \
+            --arg artifact_registry_location "$GAR_LOCATION" \
+            --arg artifact_registry_repository "$GAR_REPOSITORY" \
+            --argjson create_artifact_registry_repository "$CREATE_ARTIFACT_REGISTRY_REPOSITORY" \
+            '{
+              project_id: $project_id,
+              region: $region,
+              service_name: $service_name,
+              app_image: $app_image,
+              artifact_registry_location: $artifact_registry_location,
+              artifact_registry_repository: $artifact_registry_repository,
+              create_artifact_registry_repository: $create_artifact_registry_repository
+            }' > infra/gcloud/terraform/ci.auto.tfvars.json
+          chmod 600 infra/gcloud/terraform/ci.auto.tfvars.json
+
+          if [[ -n "${CLOUD_RUN_ENV_VARS_JSON:-}" ]]; then
+            jq -e . >/dev/null <<< "$CLOUD_RUN_ENV_VARS_JSON"
+            printf '{"env_vars":%s}\n' "$CLOUD_RUN_ENV_VARS_JSON" > infra/gcloud/terraform/env.auto.tfvars.json
+            chmod 600 infra/gcloud/terraform/env.auto.tfvars.json
+          fi
+
+          if [[ -n "${CLOUD_RUN_SECRET_ENV_VARS_JSON:-}" ]]; then
+            jq -e . >/dev/null <<< "$CLOUD_RUN_SECRET_ENV_VARS_JSON"
+            printf '{"secret_env_vars":%s}\n' "$CLOUD_RUN_SECRET_ENV_VARS_JSON" > infra/gcloud/terraform/secrets.auto.tfvars.json
+            chmod 600 infra/gcloud/terraform/secrets.auto.tfvars.json
+          fi
+
+      - name: Validate Terraform and Ansible
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/gcloud/terraform init -backend=false
+          terraform -chdir=infra/gcloud/terraform fmt -check
+          terraform -chdir=infra/gcloud/terraform validate
+          ansible-playbook -i infra/gcloud/ansible/inventory.ini.example --syntax-check infra/gcloud/ansible/playbook.yml
+
+      - name: Prepare Artifact Registry with Terraform
+        if: env.CREATE_ARTIFACT_REGISTRY_REPOSITORY == 'true'
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/gcloud/terraform init -reconfigure -backend-config=backend.hcl
+          terraform -chdir=infra/gcloud/terraform apply -auto-approve -target=google_artifact_registry_repository.app
+
+      - name: Build and push Docker image
+        run: |
+          set -euo pipefail
+
+          gcloud auth configure-docker "${GAR_LOCATION}-docker.pkg.dev" --quiet
+          docker build --target prod -t "$APP_IMAGE" .
+          docker push "$APP_IMAGE"
+
+      - name: Deploy to Cloud Run
+        run: bash infra/gcloud/deploy.sh

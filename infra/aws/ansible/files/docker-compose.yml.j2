@@ -1,0 +1,43 @@
+services:
+  app:
+    image: "{{ app_image_repository }}:{{ app_image_tag }}"
+    env_file:
+      - .env
+    expose:
+      - "8080"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+    networks:
+      - gbh_internal
+
+  caddy:
+    image: "{{ caddy_image }}"
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+    networks:
+      - gbh_internal
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  gbh_internal:
+

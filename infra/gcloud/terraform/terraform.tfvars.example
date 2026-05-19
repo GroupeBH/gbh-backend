@@ -1,0 +1,22 @@
+project_id   = "my-gcp-project"
+region       = "europe-west1"
+service_name = "gbh-backend"
+app_image    = "europe-west1-docker.pkg.dev/my-gcp-project/gbh-backend/gbh-backend:latest"
+
+artifact_registry_location   = "europe-west1"
+artifact_registry_repository = "gbh-backend"
+
+env_vars = {
+  FRONTEND_ORIGINS = "https://www.gbh.sarl"
+}
+
+secret_env_vars = {
+  MONGO_URI = {
+    secret  = "gbh-mongo-uri"
+    version = "latest"
+  }
+  JWT_SECRET = {
+    secret  = "gbh-jwt-secret"
+    version = "latest"
+  }
+}

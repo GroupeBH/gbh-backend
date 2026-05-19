@@ -1,0 +1,3 @@
+bucket = "gbh-backend-gcloud-tfstate"
+prefix = "gbh-backend/gcloud"
+

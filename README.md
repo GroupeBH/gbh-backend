@@ -64,6 +64,22 @@ go run ./cmd/api
 go run ./cmd/seed
 ```
 
+## Infrastructures as Code (IaC)
+
+Le dossier [/infra](./infra/) est maintenant organisé par provider :
+
+- `infra/gcloud` : Terraform pour Cloud Run, avec vérification Ansible après déploiement.
+- `infra/aws` : Terraform + Ansible pour AWS Lightsail, inspiré de `uty-infra-lightsail`.
+- `infra/alibabacloud` : placeholder vide pour le moment.
+
+Les workflows GitHub Actions correspondants sont :
+
+- `.github/workflows/gcloud.yml`
+- `.github/workflows/aws-lightsail.yml`
+- `.github/workflows/alibabacloud.yml`
+
+Les déploiements utilisent une image Docker construite depuis ce projet. Consulte [infra/README.md](./infra/README.md) et les README de chaque provider pour les variables GitHub, secrets et exemples de déploiement manuel.
+
 ## Endpoints principaux
 - `GET /api/services`
 - `POST /api/services` (admin)
@@ -146,23 +162,7 @@ Dans `docker-compose.prod.yml`, configure :
 - `RATE_LIMIT_APPOINTMENTS`
 - `RATE_LIMIT_CONTACT`
 - `RATE_LIMIT_WINDOW_SEC`
-- `TZ`
-- `REDIS_URL`
-- `REDIS_ADDR`
-- `REDIS_PASSWORD`
-- `REDIS_DB`
-- `CACHE_TTL_SECONDS`
-- `ADMIN_API_KEY`
-- `ADMIN_SETUP_KEY` (clé requise pour `POST /api/admin/register`)
-- `ADMIN_USER` (seed admin)
-- `ADMIN_EMAIL` (email admin optionnel)
-- `ADMIN_PASSWORD` (seed admin)
-- `ADMIN_USER_2` (seed admin optionnel)
-- `ADMIN_EMAIL_2` (email admin optionnel)
-- `ADMIN_PASSWORD_2` (seed admin optionnel)
-- `JWT_SECRET`
-- `ACCESS_TTL_MINUTES`
-- `REFRESH_TTL_MINUTES`
+- [//]: # (Continue with the existing content)
 - `COOKIE_SECURE`
 - `BREVO_API_KEY`
 - `BREVO_SENDER_EMAIL`

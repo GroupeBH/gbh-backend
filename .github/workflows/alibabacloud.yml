@@ -1,0 +1,27 @@
+name: Alibaba Cloud Placeholder
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - ".github/workflows/alibabacloud.yml"
+      - "infra/alibabacloud/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    name: Placeholder
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Explain current state
+        run: |
+          echo "Alibaba Cloud infrastructure is intentionally empty for now."
+          echo "Add Terraform and Ansible under infra/alibabacloud when the target is defined."

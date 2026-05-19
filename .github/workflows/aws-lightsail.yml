@@ -1,0 +1,167 @@
+name: Deploy GBH Backend to AWS Lightsail
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - ".github/workflows/aws-lightsail.yml"
+      - "Dockerfile"
+      - "go.mod"
+      - "go.sum"
+      - "cmd/**"
+      - "internal/**"
+      - "infra/aws/**"
+  workflow_dispatch:
+    inputs:
+      app_image_tag:
+        description: "Docker image tag to deploy. Empty uses repository variable APP_IMAGE_TAG, then latest."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gbh-backend-lightsail-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Terraform and Ansible deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
+      ADMIN_CIDR: ${{ vars.ADMIN_CIDR }}
+      KEY_PAIR_NAME: ${{ vars.KEY_PAIR_NAME }}
+      LIGHTSAIL_BUNDLE_ID: ${{ vars.LIGHTSAIL_BUNDLE_ID || 'micro_3_0' }}
+      LIGHTSAIL_BLUEPRINT_ID: ${{ vars.LIGHTSAIL_BLUEPRINT_ID || 'ubuntu_24_04' }}
+      INSTANCE_NAME: ${{ vars.INSTANCE_NAME || 'gbh-backend-prod' }}
+      STATIC_IP_NAME: ${{ vars.STATIC_IP_NAME || 'gbh-backend-prod-ip' }}
+      SSH_USER: ${{ vars.SSH_USER || 'ubuntu' }}
+      DOMAIN_NAME: ${{ vars.DOMAIN_NAME }}
+      CADDY_EMAIL: ${{ vars.CADDY_EMAIL }}
+      APP_IMAGE_REPOSITORY: ${{ vars.APP_IMAGE_REPOSITORY || 'gbhsarl/gbh-backend' }}
+      APP_IMAGE_TAG_OVERRIDE: ${{ vars.APP_IMAGE_TAG || 'latest' }}
+      APP_IMAGE_TAG_INPUT: ${{ github.event.inputs.app_image_tag }}
+      TF_BACKEND_BUCKET: ${{ vars.TF_BACKEND_BUCKET }}
+      TF_BACKEND_KEY: ${{ vars.TF_BACKEND_KEY || 'gbh-backend/aws-lightsail/terraform.tfstate' }}
+      TF_BACKEND_REGION: ${{ vars.TF_BACKEND_REGION || vars.AWS_REGION || 'eu-central-1' }}
+      APP_ENV_FILE: infra/aws/.env.production
+      TERRAFORM_INIT_RECONFIGURE: "1"
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Install Ansible
+        run: |
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user "ansible-core>=2.16,<2.19"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Resolve image tag and SSH CIDRs
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$APP_IMAGE_TAG_INPUT" ]]; then
+            resolved_tag="$APP_IMAGE_TAG_INPUT"
+          elif [[ -n "$APP_IMAGE_TAG_OVERRIDE" ]]; then
+            resolved_tag="$APP_IMAGE_TAG_OVERRIDE"
+          else
+            resolved_tag="latest"
+          fi
+
+          echo "APP_IMAGE_TAG=$resolved_tag" >> "$GITHUB_ENV"
+
+          runner_ip="$(curl -fsSL https://checkip.amazonaws.com | tr -d '[:space:]')"
+          runner_cidr="${runner_ip}/32"
+
+          printf '{\n  "extra_ssh_cidrs": ["%s"]\n}\n' "$runner_cidr" > infra/aws/terraform/ci.auto.tfvars.json
+          chmod 600 infra/aws/terraform/ci.auto.tfvars.json
+
+          if [[ -z "$ADMIN_CIDR" ]]; then
+            echo "ADMIN_CIDR=$runner_cidr" >> "$GITHUB_ENV"
+          fi
+
+      - name: Login to Docker Hub
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        run: |
+          set -euo pipefail
+          docker build --target prod \
+            -t "${APP_IMAGE_REPOSITORY}:${APP_IMAGE_TAG}" \
+            -t "${APP_IMAGE_REPOSITORY}:latest" .
+          docker push "${APP_IMAGE_REPOSITORY}:${APP_IMAGE_TAG}"
+          docker push "${APP_IMAGE_REPOSITORY}:latest"
+
+      - name: Prepare CI secrets and Terraform backend
+        env:
+          LIGHTSAIL_SSH_PRIVATE_KEY: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
+          APP_ENV_PRODUCTION: ${{ secrets.APP_ENV_PRODUCTION }}
+          TERRAFORM_TFVARS: ${{ secrets.TERRAFORM_TFVARS }}
+        run: |
+          set -euo pipefail
+
+          : "${TF_BACKEND_BUCKET:?Set repository variable TF_BACKEND_BUCKET for remote Terraform state.}"
+          : "${LIGHTSAIL_SSH_PRIVATE_KEY:?Set secret LIGHTSAIL_SSH_PRIVATE_KEY.}"
+          : "${APP_ENV_PRODUCTION:?Set secret APP_ENV_PRODUCTION.}"
+
+          SSH_PRIVATE_KEY_PATH="${RUNNER_TEMP}/ssh/lightsail_deploy_key"
+          echo "SSH_PRIVATE_KEY_PATH=$SSH_PRIVATE_KEY_PATH" >> "$GITHUB_ENV"
+
+          mkdir -p "$(dirname "$SSH_PRIVATE_KEY_PATH")"
+          chmod 700 "$(dirname "$SSH_PRIVATE_KEY_PATH")"
+          install -m 600 /dev/null "$SSH_PRIVATE_KEY_PATH"
+          printf '%s\n' "$LIGHTSAIL_SSH_PRIVATE_KEY" > "$SSH_PRIVATE_KEY_PATH"
+
+          install -m 600 /dev/null "$APP_ENV_FILE"
+          printf '%s\n' "$APP_ENV_PRODUCTION" > "$APP_ENV_FILE"
+
+          if [[ -n "${TERRAFORM_TFVARS:-}" ]]; then
+            install -m 600 /dev/null infra/aws/terraform/terraform.tfvars
+            printf '%s\n' "$TERRAFORM_TFVARS" > infra/aws/terraform/terraform.tfvars
+            terraform -chdir=infra/aws/terraform fmt terraform.tfvars
+          fi
+
+          {
+            printf 'bucket  = "%s"\n' "$TF_BACKEND_BUCKET"
+            printf 'key     = "%s"\n' "$TF_BACKEND_KEY"
+            printf 'region  = "%s"\n' "$TF_BACKEND_REGION"
+            printf 'encrypt = true\n'
+          } > infra/aws/terraform/backend.hcl
+          chmod 600 infra/aws/terraform/backend.hcl
+
+      - name: Validate Terraform and Ansible
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/aws/terraform init -backend=false
+          terraform -chdir=infra/aws/terraform fmt -check
+          terraform -chdir=infra/aws/terraform validate
+          ansible-playbook -i infra/aws/ansible/inventory.ini.example --syntax-check infra/aws/ansible/playbook.yml
+
+      - name: Deploy to Lightsail
+        run: bash infra/aws/deploy.sh

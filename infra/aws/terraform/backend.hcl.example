@@ -1,0 +1,5 @@
+bucket  = "gbh-tfstates"
+key     = "gbh-backend/aws-lightsail/terraform.tfstate"
+region  = "eu-central-1"
+encrypt = true
+

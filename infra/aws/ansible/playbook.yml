@@ -1,0 +1,279 @@
+- name: Deploy GBH Backend on AWS Lightsail
+  hosts: gbh_backend
+  become: true
+  gather_facts: true
+
+  vars:
+    app_dir: /opt/gbh-backend
+    app_image_tag: latest
+    caddy_image: caddy:2.8-alpine
+    caddy_email: ""
+    domain_name: ""
+    public_check_path: "/api/services"
+    docker_apt_arch: "{{ 'arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'amd64' }}"
+    expected_compose_services:
+      - app
+      - caddy
+
+  pre_tasks:
+    - name: Validate deployment inputs
+      ansible.builtin.assert:
+        that:
+          - app_image_repository is defined
+          - app_image_repository | length > 0
+          - app_env_file is defined
+          - app_env_file | length > 0
+        fail_msg: "Set app_image_repository and app_env_file before deploying."
+
+  tasks:
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+        state: present
+        update_cache: true
+
+    - name: Create APT keyring directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Docker official GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Configure Docker APT repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch={{ docker_apt_arch }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        filename: docker
+        state: present
+        update_cache: true
+
+    - name: Install Docker Engine and Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+
+    - name: Enable Docker service
+      ansible.builtin.service:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Create application directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Copy production environment file
+      ansible.builtin.copy:
+        src: "{{ app_env_file }}"
+        dest: "{{ app_dir }}/.env"
+        owner: root
+        group: root
+        mode: "0600"
+      register: app_env_copy
+      no_log: true
+
+    - name: Render Docker Compose file
+      ansible.builtin.template:
+        src: files/docker-compose.yml.j2
+        dest: "{{ app_dir }}/docker-compose.yml"
+        owner: root
+        group: root
+        mode: "0644"
+      register: compose_template
+
+    - name: Render Caddyfile
+      ansible.builtin.template:
+        src: files/Caddyfile.j2
+        dest: "{{ app_dir }}/Caddyfile"
+        owner: root
+        group: root
+        mode: "0644"
+      register: caddyfile_template
+
+    - name: Pull container images
+      ansible.builtin.command:
+        cmd: docker compose pull
+        chdir: "{{ app_dir }}"
+      register: compose_pull
+      changed_when: "'Downloaded newer image' in compose_pull.stdout or 'Pulling' in compose_pull.stdout"
+
+    - name: Start application stack
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans
+        chdir: "{{ app_dir }}"
+      register: compose_up
+      changed_when: "'Started' in compose_up.stdout or 'Created' in compose_up.stdout or 'Recreated' in compose_up.stdout"
+
+    - name: Recreate application stack when compose inputs changed
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans --force-recreate
+        chdir: "{{ app_dir }}"
+      register: compose_recreate
+      changed_when: true
+      when: app_env_copy.changed or compose_template.changed
+
+    - name: Recreate Caddy container when only its config changed
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans --force-recreate caddy
+        chdir: "{{ app_dir }}"
+      register: caddy_recreate
+      changed_when: true
+      when:
+        - caddyfile_template.changed
+        - not (app_env_copy.changed or compose_template.changed)
+
+    - name: Restart Caddy to reload mounted config on every deploy
+      ansible.builtin.command:
+        cmd: docker compose restart caddy
+        chdir: "{{ app_dir }}"
+      register: caddy_restart
+      changed_when: true
+
+    - name: Wait for Docker Compose services to be running
+      ansible.builtin.command:
+        cmd: docker compose ps --services --status running
+        chdir: "{{ app_dir }}"
+      register: compose_running
+      changed_when: false
+      retries: 18
+      delay: 5
+      until: (expected_compose_services | difference(compose_running.stdout_lines | map('trim') | reject('equalto', '') | list)) | length == 0
+
+    - name: Show Docker Compose status
+      ansible.builtin.command:
+        cmd: docker compose ps
+        chdir: "{{ app_dir }}"
+      register: compose_ps
+      changed_when: false
+
+    - name: Verify public endpoint from the controller
+      block:
+        - name: Request public endpoint
+          ansible.builtin.uri:
+            url: "{{ 'https://' ~ domain_name ~ public_check_path if domain_name | length > 0 else 'http://' ~ ansible_host ~ public_check_path }}"
+            method: GET
+            status_code: 200
+            return_content: false
+            timeout: 15
+            validate_certs: "{{ domain_name | length > 0 }}"
+          register: public_endpoint_check
+          changed_when: false
+          retries: 12
+          delay: 10
+          until: public_endpoint_check.status == 200
+          delegate_to: localhost
+          become: false
+      rescue:
+        - name: Collect Docker Compose status after failed public check
+          ansible.builtin.command:
+            cmd: docker compose ps
+            chdir: "{{ app_dir }}"
+          register: compose_ps_after_public_check_failure
+          changed_when: false
+
+        - name: Print Docker Compose status after failed public check
+          ansible.builtin.debug:
+            var: compose_ps_after_public_check_failure.stdout_lines
+
+        - name: Collect app logs after failed public check
+          ansible.builtin.command:
+            cmd: docker compose logs --tail=200 app
+            chdir: "{{ app_dir }}"
+          register: app_logs_after_public_check_failure
+          changed_when: false
+
+        - name: Print app logs after failed public check
+          ansible.builtin.debug:
+            var: app_logs_after_public_check_failure.stdout_lines
+
+        - name: Get app container ID after failed public check
+          ansible.builtin.command:
+            cmd: docker compose ps -q app
+            chdir: "{{ app_dir }}"
+          register: app_container_id_after_public_check_failure
+          changed_when: false
+
+        - name: Get app container IP after failed public check
+          ansible.builtin.command:
+            argv:
+              - docker
+              - inspect
+              - -f
+              - "{{ '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' }}"
+              - "{{ app_container_id_after_public_check_failure.stdout }}"
+          register: app_container_ip_after_public_check_failure
+          changed_when: false
+          when: app_container_id_after_public_check_failure.stdout | length > 0
+
+        - name: Probe app container on port 8080 after failed public check
+          ansible.builtin.uri:
+            url: "http://{{ app_container_ip_after_public_check_failure.stdout }}:8080{{ public_check_path }}"
+            method: GET
+            status_code:
+              - 200
+              - 201
+              - 204
+              - 301
+              - 302
+              - 307
+              - 308
+              - 401
+              - 403
+              - 404
+              - 405
+            return_content: false
+            timeout: 10
+          register: app_probe_8080_after_public_check_failure
+          changed_when: false
+          failed_when: false
+          when: app_container_ip_after_public_check_failure.stdout | length > 0
+
+        - name: Print direct app probe results after failed public check
+          ansible.builtin.debug:
+            msg:
+              - "app_container_ip={{ app_container_ip_after_public_check_failure.stdout | default('') }}"
+              - "port_8080_status={{ app_probe_8080_after_public_check_failure.status | default('unreachable') }}"
+              - "port_8080_msg={{ app_probe_8080_after_public_check_failure.msg | default('') }}"
+
+        - name: Collect Caddy logs after failed public check
+          ansible.builtin.command:
+            cmd: docker compose logs --tail=200 caddy
+            chdir: "{{ app_dir }}"
+          register: caddy_logs_after_public_check_failure
+          changed_when: false
+
+        - name: Print Caddy logs after failed public check
+          ansible.builtin.debug:
+            var: caddy_logs_after_public_check_failure.stdout_lines
+
+        - name: Fail with public endpoint error details
+          ansible.builtin.fail:
+            msg: >-
+              Public endpoint check failed for
+              {{ 'https://' ~ domain_name ~ public_check_path if domain_name | length > 0 else 'http://' ~ ansible_host ~ public_check_path }}:
+              {{ ansible_failed_result.msg | default(ansible_failed_result) }}
+
+    - name: Print Docker Compose status
+      ansible.builtin.debug:
+        var: compose_ps.stdout_lines
+

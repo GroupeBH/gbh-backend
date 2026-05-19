@@ -1,0 +1,8 @@
+aws_region              = "eu-central-1"
+admin_cidr             = "203.0.113.10/32"
+instance_name          = "gbh-api"
+static_ip_name         = "gbh-api-prod-ip"
+lightsail_blueprint_id = "ubuntu_24_04"
+lightsail_bundle_id    = "micro_3_0"
+domain_name            = "api.gbh.sarl"
+

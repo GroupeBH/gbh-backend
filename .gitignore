@@ -1,5 +1,16 @@
 /bin
 /.env.local
 *.env
+.env.*
+!.env.example
 tmp/
 *.exe
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/terraform/backend.hcl
+**/terraform/terraform.tfvars
+**/terraform/*.auto.tfvars
+**/terraform/*.auto.tfvars.json
+**/ansible/inventory.ini

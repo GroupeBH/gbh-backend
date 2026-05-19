@@ -1,0 +1,29 @@
+- name: Verify GBH Backend on Cloud Run
+  hosts: local
+  gather_facts: false
+
+  vars:
+    service_url: ""
+    public_check_path: "/api/services"
+
+  tasks:
+    - name: Validate deployment inputs
+      ansible.builtin.assert:
+        that:
+          - service_url is defined
+          - service_url | length > 0
+        fail_msg: "Set service_url before running the Cloud Run verification playbook."
+
+    - name: Request public endpoint
+      ansible.builtin.uri:
+        url: "{{ service_url | regex_replace('/$', '') }}{{ public_check_path }}"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 15
+      register: public_endpoint_check
+      changed_when: false
+      retries: 12
+      delay: 10
+      until: public_endpoint_check.status == 200
+
