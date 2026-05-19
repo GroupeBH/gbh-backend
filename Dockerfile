@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for development and production
 
 # Base stage for dependencies
-FROM golang:1.22-alpine AS base
+FROM golang:1.23-alpine AS base
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
